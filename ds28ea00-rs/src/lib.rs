@@ -5,7 +5,8 @@
 //! A no-std implementation of the DS28EA00 1-Wire temperature sensors in a group.
 use embedded_hal::delay::DelayNs;
 use embedded_onewire::{
-    OneWire, OneWireCrc, OneWireError, OneWireResult, OneWireSearch, OneWireSearchKind, ONEWIRE_MATCH_ROM_CMD, ONEWIRE_MATCH_ROM_CMD_OD, ONEWIRE_SKIP_ROM_CMD, ONEWIRE_SKIP_ROM_CMD_OD
+    ONEWIRE_MATCH_ROM_CMD, ONEWIRE_MATCH_ROM_CMD_OD, ONEWIRE_SKIP_ROM_CMD, ONEWIRE_SKIP_ROM_CMD_OD,
+    OneWire, OneWireCrc, OneWireError, OneWireResult, OneWireSearch, OneWireSearchKind,
 };
 use fixed::types::I12F4;
 
@@ -135,26 +136,23 @@ impl<const N: usize> Ds28ea00Group<N> {
     }
 
     /// Enable overdrive mode
-    pub fn enable_overdrive<O: OneWire>(
-        &mut self,
-        bus: &mut O,
-    ) -> OneWireResult<(), O::BusError> {
+    pub fn enable_overdrive<O: OneWire>(&mut self, bus: &mut O) -> OneWireResult<(), O::BusError> {
         bus.set_overdrive_mode(true)?; // set overdrive mode
         self.overdrive = true; // enable overdrive mode
         Ok(())
     }
 
     /// Disable overdrive mode
-    pub fn disable_overdrive<O: OneWire>(
-        &mut self,
-        bus: &mut O,
-    ) -> OneWireResult<(), O::BusError> {
+    pub fn disable_overdrive<O: OneWire>(&mut self, bus: &mut O) -> OneWireResult<(), O::BusError> {
         bus.set_overdrive_mode(false)?; // disable overdrive mode
         self.overdrive = false; // disable overdrive mode
         Ok(())
     }
 
-    pub(crate) fn address_any<O: OneWire>(bus: &mut O, overdrive: bool) -> OneWireResult<(), O::BusError> {
+    pub(crate) fn address_any<O: OneWire>(
+        bus: &mut O,
+        overdrive: bool,
+    ) -> OneWireResult<(), O::BusError> {
         let cmd = if overdrive {
             ONEWIRE_SKIP_ROM_CMD_OD // match ROM in overdrive mode
         } else {
@@ -219,35 +217,56 @@ impl<const N: usize> Ds28ea00Group<N> {
         &mut self,
         bus: &mut O,
         crc: bool,
+        ignore_errors: bool,
     ) -> OneWireResult<&[(u64, Temperature)], O::BusError> {
         for (rom, temp) in self.roms[..self.devices].iter_mut() {
-            Self::address_one(bus, *rom, self.overdrive)?; // address device
-            bus.write_byte(DS28EA00_READ_SCRATCH)?; // Read scratchpad
-            if !crc {
-                let mut buf = [0; 2];
-                for b in buf.iter_mut() {
-                    *b = bus.read_byte()?;
-                }
-                *temp = I12F4::from_le_bytes([buf[0] & self.resolution.bitmask(), buf[1]]);
-            } else {
-                let mut buf = [0; 9];
-                for b in buf.iter_mut() {
-                    *b = bus.read_byte()?;
-                }
-                if OneWireCrc::validate(&buf) {
-                    *temp = I12F4::from_le_bytes([buf[0] & self.resolution.bitmask(), buf[1]]);
+            let res = Self::read_temperature(bus, *rom, temp, self.overdrive, crc, self.toggle_pio);
+            if let Err(e) = res {
+                if !ignore_errors {
+                    return Err(e);
                 } else {
-                    return Err(OneWireError::InvalidCrc);
+                    *temp = Temperature::from_num(-85); // Set to -85 on error
                 }
-            }
-            if self.toggle_pio {
-                Self::address_one(bus, *rom, self.overdrive)?; // address device
-                bus.write_byte(DS28EA00_TOGGLE_PIO)?;
-                bus.write_byte(DS28EA00_TOGGLE_PIO_ON)?;
-                bus.write_byte(DS28EA00_TOGGLE_PIO_OFF)?;
             }
         }
         Ok(&self.roms[..self.devices])
+    }
+
+    fn read_temperature<O: OneWire>(
+        bus: &mut O,
+        rom: u64,
+        temp: &mut Temperature,
+        overdrive: bool,
+        crc: bool,
+        toggle_pio: bool,
+    ) -> OneWireResult<(), O::BusError> {
+        Self::address_one(bus, rom, overdrive)?; // address device
+        bus.write_byte(DS28EA00_READ_SCRATCH)?; // Read scratchpad
+        if !crc {
+            let mut buf = [0; 2];
+            for b in buf.iter_mut() {
+                *b = bus.read_byte()?;
+            }
+            *temp = I12F4::from_le_bytes([buf[0] & ReadoutResolution::default().bitmask(), buf[1]]);
+        } else {
+            let mut buf = [0; 9];
+            for b in buf.iter_mut() {
+                *b = bus.read_byte()?;
+            }
+            if OneWireCrc::validate(&buf) {
+                *temp =
+                    I12F4::from_le_bytes([buf[0] & ReadoutResolution::default().bitmask(), buf[1]]);
+            } else {
+                return Err(OneWireError::InvalidCrc);
+            }
+        }
+        if toggle_pio {
+            Self::address_one(bus, rom, overdrive)?; // address device
+            bus.write_byte(DS28EA00_TOGGLE_PIO)?;
+            bus.write_byte(DS28EA00_TOGGLE_PIO_ON)?;
+            bus.write_byte(DS28EA00_TOGGLE_PIO_OFF)?;
+        }
+        Ok(())
     }
 }
 
