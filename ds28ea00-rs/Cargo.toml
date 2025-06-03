@@ -1,0 +1,12 @@
+[package]
+name = "ds28ea00"
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0"
+description = "A no-std driver implementation of the Analog Devices DS28EA00 temperature sensors using the OneWire trait from embedded-onewire crate."
+authors = ["Sunip K. Mukherjee <sunipkmukherjee@gmail.com>"]
+
+[dependencies]
+embedded-onewire = { version = "0.0.1", default-features = false }
+fixed = { version = "1" }
+embedded-hal = "1.0"
