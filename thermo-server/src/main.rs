@@ -50,7 +50,7 @@ fn main() {
     log::info!("Arguments: {args:#?}");
     let serial = PathBuf::from(&args.serial);
     if !serial.exists() {
-        log::error!("[COM] Fatal error: {} does not exist.",  &args.serial);
+        log::error!("[COM] Fatal error: {} does not exist.", &args.serial);
         return;
     }
     // Synchronizer

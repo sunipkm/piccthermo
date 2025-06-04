@@ -1,6 +1,11 @@
-use std::{sync::{
-    atomic::{AtomicBool, Ordering}, mpsc, Arc
-}, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
+    time::Duration,
+};
 
 use crate::{Measurement, safe_mpsc};
 
@@ -33,18 +38,16 @@ pub fn serial_thread(
         'readout: while running.load(Ordering::Relaxed) {
             let samp = match source.receiver().recv_timeout(Duration::from_secs(2)) {
                 Ok(samp) => samp,
-                Err(e) => {
-                    match e {
-                        mpsc::RecvTimeoutError::Timeout => {
-                            log::warn!("[COM] Timeout while waiting for data: {e}");
-                            continue 'readout;
-                        }
-                        mpsc::RecvTimeoutError::Disconnected => {
-                            log::warn!("[COM] Data source disconnected: {e}");
-                            break 'root;
-                        }
+                Err(e) => match e {
+                    mpsc::RecvTimeoutError::Timeout => {
+                        log::warn!("[COM] Timeout while waiting for data: {e}");
+                        continue 'readout;
                     }
-                }
+                    mpsc::RecvTimeoutError::Disconnected => {
+                        log::warn!("[COM] Data source disconnected: {e}");
+                        break 'root;
+                    }
+                },
             };
             if let Err(e) = ser.write_all(&samp.to_le_bytes()) {
                 log::error!("[COM] Failed to write data to serial port: {e}");
