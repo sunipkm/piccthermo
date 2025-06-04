@@ -64,7 +64,7 @@ int thermo_client_read(int fd, thermal_data_s *data)
     static char pattern[] = "CHRIS,";
     static int pattern_length = sizeof(pattern) / sizeof(pattern[0]) - 1; // Exclude null terminator
     char check;
-    // We are looking for a data of the format: CHRIS,[T|H],uint32_t,float (6 + 1 + 1 + 4 + 4 = 16 bytes)
+    // We are looking for a data of the format: CHRIS,[T|H],uint32_t float (6 + 1 + 1 + 4 + 4 = 16 bytes)
     ssize_t bytes_read = 0;
     int index = 0;
     while (1)
