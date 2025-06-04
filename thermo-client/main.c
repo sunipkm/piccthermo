@@ -1,6 +1,15 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <signal.h>
 #include "thermo_client.h"
+
+volatile sig_atomic_t running = 1;
+
+void sighandler(int sig)
+{
+    (void) sig;
+    running = 0;
+}
 
 int main(int argc, char *argv[])
 {
@@ -11,29 +20,32 @@ int main(int argc, char *argv[])
     }
     int fd = 0;
     thermal_data_s data;
-start:
-    fd = thermo_client_init(argv[1]);
-    if (fd < 0)
+    signal(SIGINT, sighandler);
+    while (running)
     {
-        return 1; // Initialization failed
-    }
-    printf("Preparing to read data...\n");
-    while (1)
-    {
-        int result = thermo_client_read(fd, &data);
-        if (result < 0)
+        fd = thermo_client_init(argv[1]);
+        if (fd < 0)
         {
-            perror("Error reading data");
-            goto start;
+            sleep(1);
+            continue; // Initialization failed
         }
-        else if (result == 0)
+        printf("Preparing to read data...\n");
+        while (running)
         {
-            continue; // No data available or malformed data, continue reading
+            int result = thermo_client_read(fd, &data);
+            if (result < 0)
+            {
+                perror("Error reading data");
+                break;
+            }
+            else if (result == 0)
+            {
+                continue; // No data available or malformed data, continue reading
+            }
+
+            printf("Received: Type: %c, Source: 0x%08x, Value: %.2f %c\n", data.type, data.source, data.value, data.type == 'T' ? 'C' : '%');
         }
-
-        printf("Received: Type: %c, Source: 0x%08x, Value: %.2f %c\n", data.type, data.source, data.value, data.type == 'T' ? 'C' : '%');
     }
-
     close(fd);
     return 0;
 }

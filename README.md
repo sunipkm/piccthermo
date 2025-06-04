@@ -31,3 +31,26 @@ The rust-analyzer extension for Visual Studio Code needs to be made aware of the
     "rust-analyzer.cargo.target": "armv7-unknown-linux-gnueabihf"
 }
 ```
+
+### User setup and running on boot
+#### User setup
+Add yourself to the `i2c` and `dialout` groups:
+```sh
+sudo usermod -aG i2c $USER
+sudo usermod -aG dialout $USER
+```
+
+#### Running on boot
+
+```sh
+sudo install thermo.service /usr/lib/systemd/system
+```
+Then, to test,
+```sh
+sudo systemctl start thermo
+```
+
+To enable,
+```sh
+sudo systemctl enable thermo
+```
