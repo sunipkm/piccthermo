@@ -1,1 +1,3 @@
 /target
+**/*.o
+thermo-client/thermo-client
