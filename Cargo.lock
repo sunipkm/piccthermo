@@ -609,6 +609,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "thermo-tester"
+version = "0.0.1"
+dependencies = [
+ "clap",
+ "crc32fast",
+ "ds2484",
+ "ds28ea00",
+ "embedded-hal",
+ "embedded-onewire",
+ "env_logger",
+ "fixed",
+ "linux-embedded-hal",
+ "log",
+ "num-traits",
+]
+
+[[package]]
 name = "thiserror"
 version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"

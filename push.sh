@@ -10,6 +10,7 @@ fi
 cross build --target $TARGET --release
 ssh pyro -t 'mkdir -p ~/thermo-server'
 scp target/$TARGET/release/thermo-server pyro:~/thermo-server
+scp target/$TARGET/release/thermo-tester pyro:~/thermo-server
 ssh -q pyro -t 'stat "thermo-server/thermo.env" &> /dev/null'
 if [ $? -ne 0 ]; then
     scp thermo.env thermo.service pyro:~/thermo-server

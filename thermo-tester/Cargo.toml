@@ -1,0 +1,21 @@
+[package]
+name = "thermo-tester"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+embedded-onewire = { version = "0.0.1", default-features = false, features = [
+    "crc-table",
+] }
+embedded-hal = { version = "1.0", default-features = false }
+ds2484 = { version = "0.0.1" }
+ds28ea00 = { path = "../ds28ea00-rs" }
+linux-embedded-hal = { version = "0.4", default-features = false, features = [
+    "i2c",
+] }
+log = "0.4"
+env_logger = "0.11"
+clap = { version = "4.5", features = ["derive"] }
+fixed = { version = "1.29", features = ["num-traits"] }
+num-traits = "0.2"
+crc32fast = "1.4"
