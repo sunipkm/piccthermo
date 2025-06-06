@@ -66,6 +66,12 @@ fn main() {
     }
     // Channel
     let (data_tx, data_rx) = safe_mpsc::channel();
+    // Spawn the serial communication thread
+    let ser_hdl = {
+        let running = running.clone();
+        thread::spawn(move || serial_comm::serial_thread(args.serial, running, data_rx))
+    };
+    // Spawn the temperature sensor threads
     let temp_hdls = args
         .thermo_paths
         .iter()
@@ -82,23 +88,23 @@ fn main() {
             }
         })
         .collect::<Vec<_>>();
-    let ser_hdl = {
-        let running = running.clone();
-        thread::spawn(move || serial_comm::serial_thread(args.serial, running, data_rx))
-    };
+    // TODO: Spawn humidity sensor threads if needed
+    // Main thread: wait for threads to finish
     while running.load(Ordering::Relaxed) {
         thread::sleep(Duration::from_secs(1));
     }
-    if let Err(e) = ser_hdl.join() {
-        log::error!("[COM] Thread panicked: {e:#?}");
-    } else {
-        log::info!("[COM] Thread joined successfully.");
-    }
+    // Join temp sensor threads
     for temp_hdl in temp_hdls {
         if let Err(e) = temp_hdl.join() {
             log::error!("[TMP] Thread panicked with error: {e:#?}");
         } else {
             log::info!("[TMP] Thread joined successfully.");
         }
+    }
+    // Join the serial communication thread
+    if let Err(e) = ser_hdl.join() {
+        log::error!("[COM] Thread panicked: {e:#?}");
+    } else {
+        log::info!("[COM] Thread joined successfully.");
     }
 }

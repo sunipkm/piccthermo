@@ -1,3 +1,14 @@
+/**
+ * @file thermo_client.h
+ * @author Sunip K. Mukherjee (sunipkmukherjee@gmail.com)
+ * @brief Temperature and Humidity data client for PICTURE-D: Implementations for reading data from a serial port.
+ * @version 0.0.1
+ * @date 2025-06-03
+ *
+ * @copyright Copyright (c) 2025
+ *
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,6 +16,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <termios.h>
+#include <signal.h>
+#include <poll.h>
 
 #include "thermo_client.h"
 
@@ -13,14 +26,12 @@ int thermo_client_init(const char *port)
     int fd = open(port, O_RDWR);
     if (fd == -1)
     {
-        perror("Error opening port");
         return -1;
     }
 
     struct termios options;
     if (tcgetattr(fd, &options) < 0)
     {
-        perror("Error getting terminal attributes");
         close(fd);
         return -1;
     }
@@ -46,7 +57,6 @@ int thermo_client_init(const char *port)
     tcflush(fd, TCIFLUSH);
     if (tcsetattr(fd, TCSANOW, &options) < 0)
     {
-        perror("Error setting terminal attributes");
         close(fd);
         return -1;
     }
@@ -54,7 +64,7 @@ int thermo_client_init(const char *port)
     return fd;
 }
 
-int thermo_client_read(int fd, thermal_data_s *data)
+int thermo_client_read(int fd, thermal_data_s *data, volatile sig_atomic_t *running)
 {
     if (fd < 0 || data == NULL)
     {
@@ -67,8 +77,28 @@ int thermo_client_read(int fd, thermal_data_s *data)
     // We are looking for a data of the format: CHRIS,[T|H],uint32_t float (6 + 1 + 1 + 4 + 4 = 16 bytes)
     ssize_t bytes_read = 0;
     int index = 0;
-    while (1)
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN | POLLERR | POLLHUP; // Monitor for input, errors, and hangups
+
+    while (running)
     {
+        // Use poll to wait for data or timeout
+        int poll_result = poll(&pfd, 1, 100); // Wait for 100 milliseconds
+        if (poll_result < 0)
+        {
+            return -1; // Error occurred during polling
+        }
+        else if (poll_result == 0)
+        {
+            // Timeout occurred, continue to check for data
+            continue;
+        }
+        if (pfd.revents & (POLLERR | POLLHUP))
+        {
+            // An error or hangup occurred, return -1
+            return -1;
+        }
         bytes_read = read(fd, &check, sizeof(check));
         if (bytes_read < 0)
         {
@@ -76,14 +106,6 @@ int thermo_client_read(int fd, thermal_data_s *data)
         }
         else if (bytes_read == 0)
         {
-            // No data available, check for signs of life
-            // This is a hack, we should switch to poll(1) if
-            // any client-server communication is establised.
-            bytes_read = write(fd, &check, sizeof(check));
-            if (bytes_read < 0)
-            {
-                return bytes_read;
-            }
             continue;
         }
         // printf("Received: %c", check);

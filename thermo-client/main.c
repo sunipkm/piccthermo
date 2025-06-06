@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
         printf("Preparing to read data...\n");
         while (running)
         {
-            int result = thermo_client_read(fd, &data);
+            int result = thermo_client_read(fd, &data, &running);
             if (result < 0)
             {
                 perror("Error reading data");

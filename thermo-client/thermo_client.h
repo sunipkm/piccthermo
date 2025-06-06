@@ -48,10 +48,11 @@ int thermo_client_init(const char *_Nonnull port);
  *
  * @param fd The file descriptor of the opened serial port.
  * @param data Pointer to a thermal_data_s structure to store the read data.
+ * @param stop Pointer to a volatile sig_atomic_t variable to indicate if the reading should continue. If this variable is set to 0, the function will stop reading and return.
  * @return int 1 on success, 0 on incomplete data, -1 value on failure. `errno` will be set to indicate the error.
  */
 
-int thermo_client_read(int fd, thermal_data_s *_Nonnull data);
+int thermo_client_read(int fd, thermal_data_s *_Nonnull data, volatile sig_atomic_t *_Nonnull running);
 
 #ifdef __cplusplus
 }
