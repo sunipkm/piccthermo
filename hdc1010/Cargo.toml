@@ -1,8 +1,0 @@
-[package]
-name = "hdc1010"
-version = "0.0.1"
-edition = "2024"
-
-[dependencies]
-bitfield-struct = "0.11"
-embedded-hal = { version = "1.0.0", default-features = false }

@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["ds28ea00-rs", "hdc1010", "thermo-server", "thermo-tester"]
+members = ["ds28ea00-rs", "hdc1010-rs", "thermo-server", "thermo-tester"]
