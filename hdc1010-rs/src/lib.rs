@@ -8,9 +8,9 @@ mod core;
 mod error;
 mod register;
 
+pub use address::SlaveAddress;
 pub use core::{Hdc1010, Hdc1010Builder};
 pub use error::Error;
 pub use register::{
-    AcquisitionMode, Humidity, HumidityResolution, Temperature, TemperatureResolution, Trigger
+    AcquisitionMode, Humidity, HumidityResolution, Temperature, TemperatureResolution, Trigger,
 };
-pub use address::SlaveAddress;

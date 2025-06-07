@@ -86,9 +86,7 @@ impl Hdc1010Builder {
 
 impl<T: I2c<SevenBitAddress>> Hdc1010<'_, T> {
     /// Get the current temperature and humidity resolutions.
-    pub fn get_resolution(
-        &mut self,
-    ) -> (HumidityResolution, TemperatureResolution) {
+    pub fn get_resolution(&mut self) -> (HumidityResolution, TemperatureResolution) {
         (self.hres, self.tres)
     }
 
@@ -179,7 +177,7 @@ impl<T: I2c<SevenBitAddress>> Hdc1010<'_, T> {
     ///
     /// # Parameters:
     /// - `kind`: An optional [`Trigger`] enum that specifies whether to measure temperature, humidity, or both.
-    ///   Note: If the acquisition mode is set to [`AcquisitionMode::Both`], this parameter is ignored.
+    ///   Note: If the acquisition mode is not set to [`AcquisitionMode::Both`] while trigger is [`Trigger::Both`], an error is returned.
     ///
     /// # Returns:
     /// - [`Duration`]: The duration to wait for the measurement to complete.
@@ -195,18 +193,20 @@ impl<T: I2c<SevenBitAddress>> Hdc1010<'_, T> {
                 Temperature::default().read(self)?
             }
             Trigger::Temperature => {
-                if self.mode == AcquisitionMode::Both {
-                    return Err(Error::InvalidOperation);
-                }
                 delay += self.tres.delay_time();
+                if self.mode == AcquisitionMode::Both {
+                    delay += self.hres.delay_time();
+                }
                 Temperature::default().read(self)?
             }
             Trigger::Humidity => {
                 if self.mode == AcquisitionMode::Both {
-                    return Err(Error::InvalidOperation);
+                    delay += self.tres.delay_time();
+                    Temperature::default().read(self)? // Trigger using temperature in case acquisition mode is Both
+                } else {
+                    Humidity::default().read(self)?; // Trigger using humidity if acquisition mode is Separate
                 }
                 delay += self.hres.delay_time();
-                Humidity::default().read(self)?
             }
         }
 
