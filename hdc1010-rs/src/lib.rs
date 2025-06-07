@@ -11,5 +11,5 @@ mod register;
 pub use core::{Hdc1010, Hdc1010Builder};
 pub use error::Error;
 pub use register::{
-    AcquisitionMode, Humidity, HumidityResolution, Temperature, TemperatureResolution,
+    AcquisitionMode, Humidity, HumidityResolution, Temperature, TemperatureResolution, Trigger
 };

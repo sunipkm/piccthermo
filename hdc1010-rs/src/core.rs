@@ -10,7 +10,7 @@ use crate::{
     address::SlaveAddress,
     register::{
         self, Configuration, DeviceId, Hdc1010Register, HumidityResolution, ManufacturerId,
-        TemperatureResolution, Trigger, delay_time,
+        TemperatureResolution, Trigger,
     },
 };
 
@@ -88,10 +88,8 @@ impl<T: I2c<SevenBitAddress>> Hdc1010<'_, T> {
     /// Get the current temperature and humidity resolutions.
     pub fn get_resolution(
         &mut self,
-    ) -> Result<(HumidityResolution, TemperatureResolution), Error<T::Error>> {
-        let mut conf = Configuration::default();
-        conf.read(self)?;
-        Ok((conf.humidity_resolution(), conf.temperature_resolution()))
+    ) -> (HumidityResolution, TemperatureResolution) {
+        (self.hres, self.tres)
     }
 
     /// Set the humidity and temperature resolutions.
@@ -104,7 +102,42 @@ impl<T: I2c<SevenBitAddress>> Hdc1010<'_, T> {
         conf.set_humidity_resolution(humidity_resolution);
         conf.set_temperature_resolution(temperature_resolution);
         conf.write(self)?;
+        conf.read(self)?;
+        self.hres = conf.humidity_resolution();
+        self.tres = conf.temperature_resolution();
         Ok(())
+    }
+
+    /// Get the current acquisition mode of the HDC1010 sensor.
+    pub fn get_mode(&mut self) -> AcquisitionMode {
+        self.mode
+    }
+
+    /// Set the acquisition mode of the HDC1010 sensor.
+    pub fn set_mode(&mut self, mode: AcquisitionMode) -> Result<(), Error<T::Error>> {
+        let mut conf = Configuration::default();
+        conf.read(self)?;
+        conf.set_mode(mode);
+        conf.write(self)?;
+        conf.read(self)?;
+        self.mode = mode;
+        Ok(())
+    }
+
+    /// Set the heater state of the HDC1010 sensor.
+    pub fn set_heater(&mut self, enable: bool) -> Result<(), Error<T::Error>> {
+        let mut conf = Configuration::default();
+        conf.read(self)?;
+        conf.set_heater_enable(enable);
+        conf.write(self)?;
+        Ok(())
+    }
+
+    /// Get the power status of the HDC1010 sensor.
+    pub fn get_power_status(&mut self) -> Result<bool, Error<T::Error>> {
+        let mut conf = Configuration::default();
+        conf.read(self)?;
+        Ok(conf.power_ok())
     }
 
     /// Get the serial number of the HDC1010 sensor.
@@ -139,22 +172,41 @@ impl<T: I2c<SevenBitAddress>> Hdc1010<'_, T> {
     }
 
     /// Trigger a measurement of temperature, humidity, or both.
-    /// 
+    ///
     /// # Parameters:
     /// - `kind`: An optional [`Trigger`] enum that specifies whether to measure temperature, humidity, or both.
     ///   Note: If the acquisition mode is set to [`AcquisitionMode::Both`], this parameter is ignored.
-    /// 
+    ///
     /// # Returns:
     /// - [`Duration`]: The duration to wait for the measurement to complete.
-    pub fn trigger(&mut self, kind: Option<Trigger>) -> Result<Duration, Error<T::Error>> {
+    pub fn trigger(&mut self, kind: Trigger) -> Result<Duration, Error<T::Error>> {
+        let mut delay = 0;
+
         match kind {
-            None => Temperature::default().read(self)?,
-            Some(Trigger::Temperature) => Temperature::default().read(self)?,
-            Some(Trigger::Humidity) => Humidity::default().read(self)?,
+            Trigger::Both => {
+                if self.mode != AcquisitionMode::Both {
+                    return Err(Error::InvalidOperation);
+                }
+                delay += self.hres.delay_time() + self.tres.delay_time();
+                Temperature::default().read(self)?
+            }
+            Trigger::Temperature => {
+                if self.mode == AcquisitionMode::Both {
+                    return Err(Error::InvalidOperation);
+                }
+                delay += self.tres.delay_time();
+                Temperature::default().read(self)?
+            }
+            Trigger::Humidity => {
+                if self.mode == AcquisitionMode::Both {
+                    return Err(Error::InvalidOperation);
+                }
+                delay += self.hres.delay_time();
+                Humidity::default().read(self)?
+            }
         }
-        Ok(Duration::from_micros(
-            delay_time(kind, self.mode, self.hres, self.tres) as _,
-        ))
+
+        Ok(Duration::from_micros(delay as _))
     }
 
     /// Read the current humidity value.

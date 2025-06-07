@@ -11,6 +11,8 @@ pub enum Error<E> {
     ReadOnly,
     /// An error occurred due to an invalid operation.
     Timeout,
+    /// The sensor is not configured for the requested operation.
+    InvalidOperation,
 }
 
 impl<E> From<E> for Error<E> {

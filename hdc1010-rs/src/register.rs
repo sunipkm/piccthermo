@@ -22,9 +22,14 @@ pub(crate) trait Hdc1010Register: Default {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
+/// Trigger a measurement for either temperature or humidity.
 pub enum Trigger {
+    /// Trigger a measurement for both temperature and humidity.
+    Both,
+    /// Trigger a temperature measurement.
     Temperature,
+    /// Trigger a humidity measurement.
     Humidity,
 }
 
@@ -329,25 +334,4 @@ impl Hdc1010Register for DeviceId {
         }
         Ok(())
     }
-}
-
-/// Calculates the delay time in microseconds based on the acquisition mode and resolutions.
-pub(crate) fn delay_time(
-    what: Option<Trigger>,
-    mode: AcquisitionMode,
-    hres: HumidityResolution,
-    tres: TemperatureResolution,
-) -> u32 {
-    let mut delay = 0;
-    if mode == AcquisitionMode::Both || what.is_none() {
-        delay += hres.delay_time();
-        delay += tres.delay_time();
-    } else if mode == AcquisitionMode::Separate {
-        match what.unwrap() {
-            // Safety: we already checked if `what` is `None`
-            Trigger::Temperature => delay += tres.delay_time(),
-            Trigger::Humidity => delay += hres.delay_time(),
-        }
-    }
-    delay
 }
