@@ -168,6 +168,10 @@ impl<T: I2c<SevenBitAddress>> Hdc1010<'_, T> {
         conf.set_humidity_resolution(self.hres);
         conf.set_temperature_resolution(self.tres);
         conf.write(self)?;
+        conf.read(self)?;
+        self.mode = conf.mode();
+        self.hres = conf.humidity_resolution();
+        self.tres = conf.temperature_resolution();
         Ok(())
     }
 

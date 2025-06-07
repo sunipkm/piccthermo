@@ -13,3 +13,4 @@ pub use error::Error;
 pub use register::{
     AcquisitionMode, Humidity, HumidityResolution, Temperature, TemperatureResolution, Trigger
 };
+pub use address::SlaveAddress;
