@@ -26,7 +26,7 @@ void sighandler(int sig)
 }
 
 WINDOW *output_win, *input_win;
-thermal_port_s thermo_fd = { .fd = 0, .synced = 0};
+int thermo_fd = -1;
 pthread_mutex_t win_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void init_ui()
@@ -62,9 +62,9 @@ void *read_input(void *arg)
             break;
         }
 
-        if (thermo_fd.fd && strlen(input_buf) > 0)
+        if (thermo_fd && strlen(input_buf) > 0)
         {
-            int w = write(thermo_fd.fd, input_buf, strlen(input_buf));
+            int w = write(thermo_fd, input_buf, strlen(input_buf));
             (void) w;
         }
         werase(input_win);
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
     while (running)
     {
         char buf[1024] = {0}; // Clear the buffer
-        fd = thermo_client_init(argv[1], &thermo_fd);
+        fd = thermo_client_init(argv[1]);
         if (fd < 0)
         {
             snprintf(buf, sizeof(buf), "Error reading data: %s\n", strerror(errno));
@@ -108,9 +108,10 @@ int main(int argc, char *argv[])
             sleep(1);
             continue; // Initialization failed
         }
+        thermo_fd = fd;
         while (running)
         {
-            int result = thermo_client_read(&thermo_fd, &data, &running);
+            int result = thermo_client_read(fd, &data, &running);
             if (result < 0)
             {
                 snprintf(buf, sizeof(buf), "Error reading data: %s\n", strerror(errno));
