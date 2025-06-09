@@ -12,14 +12,14 @@ use clap::Parser;
 
 // Local imports
 mod data_format;
+mod humi_sensors;
 mod safe_mpsc;
 mod serial_comm;
 mod temp_sensors;
-mod humi_sensors;
 
 pub use data_format::Measurement;
-use temp_sensors::onewire_thread;
 use humi_sensors::humidity_thread;
+use temp_sensors::onewire_thread;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -90,19 +90,23 @@ fn main() {
             }
         })
         .collect::<Vec<_>>();
-    // TODO: Spawn humidity sensor threads if needed
-    let hum_hdls = args.humidity_paths.iter().filter_map(|path| {
-        let path = PathBuf::from(format!("/dev/i2c-{path}"));
-        if path.exists() {
-            let running = running.clone();
-            let sink = data_tx.clone();
-            Some(thread::spawn({
-                move || humidity_thread(path, running, sink)
-            }))
-        } else {
-            None
-        }
-    }).collect::<Vec<_>>();
+    // Spawn humidity sensor threads if needed
+    let hum_hdls = args
+        .humidity_paths
+        .iter()
+        .filter_map(|path| {
+            let path = PathBuf::from(format!("/dev/i2c-{path}"));
+            if path.exists() {
+                let running = running.clone();
+                let sink = data_tx.clone();
+                Some(thread::spawn({
+                    move || humidity_thread(path, running, sink)
+                }))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
     // Main thread: wait for threads to finish
     while running.load(Ordering::Relaxed) {
         thread::sleep(Duration::from_secs(1));

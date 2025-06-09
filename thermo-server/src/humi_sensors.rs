@@ -40,16 +40,17 @@ pub fn humidity_thread(
                     .build(&mut i2c)
                 {
                     Ok(mut hdc) => {
-                        println!(
+                        log::info!(
                             "[HUM] {lpath}> Device found at address {:02x}",
                             hdc.get_address()
                         );
-                        hdc.reset(&mut i2c, &mut delay).unwrap_or_else(|_| {
-                            panic!(
-                                "[HUM] {lpath}> Sensor 0x{:02x}: Could not reset.",
+                        if let Err(e) = hdc.reset(&mut i2c, &mut delay) {
+                            log::error!(
+                                "[HUM] {lpath}> Error resetting sensor {:02x}: {e:?}.",
                                 hdc.get_address()
-                            )
-                        });
+                            );
+                            return None;
+                        }
                         Some(hdc)
                     }
                     Err(e) => {

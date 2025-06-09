@@ -43,7 +43,9 @@ fn init(path: String) {
             {
                 Ok(mut hdc) => {
                     println!("[HUM] Device found at address {:02x}", hdc.get_address());
-                    hdc.reset(&mut i2c, &mut delay).unwrap_or_else(|_| panic!("[HUM] Sensor 0x{:02x}: Could not reset.", hdc.get_address()));
+                    hdc.reset(&mut i2c, &mut delay).unwrap_or_else(|_| {
+                        panic!("[HUM] Sensor 0x{:02x}: Could not reset.", hdc.get_address())
+                    });
                     Some(hdc)
                 }
                 Err(e) => {
@@ -77,8 +79,15 @@ fn init(path: String) {
             std::thread::sleep(delay);
             for hdc in hdc10s.iter_mut() {
                 match hdc.read_humidity(&mut i2c) {
-                    Ok(r) => log::info!("[HUM] Sensor 0x{:02x}: {}%", hdc.get_address(), r.percentage()),
-                    Err(e) => log::warn!("[HUM] Sensor 0x{:02x}: Error reading: {e:?}", hdc.get_address()),
+                    Ok(r) => log::info!(
+                        "[HUM] Sensor 0x{:02x}: {}%",
+                        hdc.get_address(),
+                        r.percentage()
+                    ),
+                    Err(e) => log::warn!(
+                        "[HUM] Sensor 0x{:02x}: Error reading: {e:?}",
+                        hdc.get_address()
+                    ),
                 }
             }
             log::info!(
