@@ -13,10 +13,12 @@ pub(crate) trait Hdc1010Register: Default {
     fn read<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>>;
     fn write<T: I2c<SevenBitAddress>>(
         &mut self,
         _hdc: &mut Hdc1010<T>,
+        _i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         Err(Error::ReadOnly)
     }
@@ -55,10 +57,10 @@ impl Hdc1010Register for Temperature {
     fn read<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
-        hdc.i2c
-            .write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
+        i2c.read(hdc.address, &mut buffer)?;
         self.value = u16::from_be_bytes(buffer);
         Ok(())
     }
@@ -66,8 +68,10 @@ impl Hdc1010Register for Temperature {
     fn write<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
-        hdc.i2c.write(hdc.address, &[Self::ADDRESS])?;
+        println!("0x{:02x}> Writing to 0x{:02x}", hdc.address, Self::ADDRESS);
+        i2c.write(hdc.address, &[Self::ADDRESS])?;
         Ok(())
     }
 }
@@ -93,10 +97,10 @@ impl Hdc1010Register for Humidity {
     fn read<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
-        hdc.i2c
-            .write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
+        i2c.read(hdc.address, &mut buffer)?;
         self.value = u16::from_be_bytes(buffer);
         Ok(())
     }
@@ -104,8 +108,10 @@ impl Hdc1010Register for Humidity {
     fn write<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
-        hdc.i2c.write(hdc.address, &[Self::ADDRESS])?;
+        println!("0x{:02x}> Writing to 0x{:02x}", hdc.address, Self::ADDRESS);
+        i2c.write(hdc.address, &[Self::ADDRESS])?;
         Ok(())
     }
 }
@@ -166,10 +172,10 @@ impl Hdc1010Register for Configuration {
     fn read<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
-        hdc.i2c
-            .write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
+        i2c.write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
         *self = u16::from_be_bytes(buffer).into();
         Ok(())
     }
@@ -177,10 +183,10 @@ impl Hdc1010Register for Configuration {
     fn write<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let buffer = self.into_bits().to_be_bytes();
-        hdc.i2c
-            .write(hdc.address, &[Self::ADDRESS, buffer[0], buffer[1]])?;
+        i2c.write(hdc.address, &[Self::ADDRESS, buffer[0], buffer[1]])?;
         Ok(())
     }
 }
@@ -278,10 +284,10 @@ impl Hdc1010Register for SerialId {
     fn read<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
-        hdc.i2c
-            .write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
+        i2c.write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
         self.0 = (buffer[0] as u64) << 33
             | (buffer[1] as u64) << 25
             | (buffer[2] as u64) << 17
@@ -302,10 +308,10 @@ impl Hdc1010Register for ManufacturerId {
     fn read<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
-        hdc.i2c
-            .write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
+        i2c.write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
         self.0 = u16::from_be_bytes(buffer);
         if self.0 != HDC1010_MANUFACTURER_ID {
             return Err(Error::InvalidId);
@@ -324,10 +330,10 @@ impl Hdc1010Register for DeviceId {
     fn read<T: I2c<SevenBitAddress>>(
         &mut self,
         hdc: &mut Hdc1010<T>,
+        i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
-        hdc.i2c
-            .write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
+        i2c.write_read(hdc.address, &[Self::ADDRESS], &mut buffer)?;
         self.0 = u16::from_be_bytes(buffer);
         if self.0 != HDC1010_DEVICE_ID {
             return Err(Error::InvalidId);

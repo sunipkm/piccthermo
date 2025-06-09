@@ -1,4 +1,4 @@
-#![no_std]
+// #![no_std]
 #![deny(missing_docs)]
 //!# HDC1010 - Driver for the Texas Instruments HDC1010 Humidity and Temperature Sensor
 //! This crate provides a driver for the HDC1010 sensor, allowing you to read humidity and temperature data.

@@ -10,6 +10,15 @@ pub struct SlaveAddress {
     pub a0: bool,
     #[bits(1, default = false)]
     pub a1: bool,
-    #[bits(6, default = 0x40)]
+    #[bits(6, default = 0x40 >> 2)]
     reserved: u8,
+}
+
+mod test {
+    #[test]
+    fn test_addr() {
+        extern crate std;
+        let addr = super::SlaveAddress::default();
+        std::println!("Address: 0x{:02x}", addr.into_bits());
+    }
 }

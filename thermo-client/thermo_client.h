@@ -32,13 +32,19 @@ typedef struct _thermal_data_s
     float value;     // Temperature in Celsius or Humidity in percentage
 } thermal_data_s;
 
+typedef struct _thermal_port_s {
+    int fd;
+    int synced;
+} thermal_port_s;
+
 /**
  * @brief Open a serial port with the given port name, and apply necessary settings.
  *
  * @param port The name of the serial port to open (e.g., "/dev/ttyACM0").
+ * @param desc Pointer to the port descriptor.
  * @return int Positive file descriptor on success, -1 value on failure. `errno` will be set to indicate the error.
  */
-int thermo_client_init(const char *_Nonnull port);
+int thermo_client_init(const char *_Nonnull port, thermal_port_s *_Nonnull desc);
 
 /**
  * @brief Read temperature or humidity data from the serial port.
@@ -52,7 +58,7 @@ int thermo_client_init(const char *_Nonnull port);
  * @return int 1 on success, 0 on incomplete data, -1 value on failure. `errno` will be set to indicate the error.
  */
 
-int thermo_client_read(int fd, thermal_data_s *_Nonnull data, volatile sig_atomic_t *_Nonnull running);
+int thermo_client_read(thermal_port_s *_Nonnull desc, thermal_data_s *_Nonnull data, volatile sig_atomic_t *_Nonnull running);
 
 #ifdef __cplusplus
 }

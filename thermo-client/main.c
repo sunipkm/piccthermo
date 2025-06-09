@@ -19,11 +19,12 @@ int main(int argc, char *argv[])
         return 1;
     }
     int fd = 0;
+    thermal_port_s port;
     thermal_data_s data;
     signal(SIGINT, sighandler);
     while (running)
     {
-        fd = thermo_client_init(argv[1]);
+        fd = thermo_client_init(argv[1], &port);
         if (fd < 0)
         {
             sleep(1);
@@ -32,7 +33,7 @@ int main(int argc, char *argv[])
         printf("Preparing to read data...\n");
         while (running)
         {
-            int result = thermo_client_read(fd, &data, &running);
+            int result = thermo_client_read(&port, &data, &running);
             if (result < 0)
             {
                 perror("Error reading data");

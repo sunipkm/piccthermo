@@ -21,7 +21,7 @@
 
 #include "thermo_client.h"
 
-int thermo_client_init(const char *port)
+int thermo_client_init(const char *port, thermal_port_s *desc)
 {
     int fd = open(port, O_RDWR);
     if (fd == -1)
@@ -61,11 +61,14 @@ int thermo_client_init(const char *port)
         return -1;
     }
     tcflush(fd, TCIFLUSH);
+    desc->fd = fd;
+    desc->synced = 0;
     return fd;
 }
 
-int thermo_client_read(int fd, thermal_data_s *data, volatile sig_atomic_t *running)
+int thermo_client_read(thermal_port_s *desc, thermal_data_s *data, volatile sig_atomic_t *running)
 {
+    int fd = desc->fd;
     if (fd < 0 || data == NULL)
     {
         fprintf(stderr, "Invalid file descriptor or data pointer\n");
@@ -81,7 +84,7 @@ int thermo_client_read(int fd, thermal_data_s *data, volatile sig_atomic_t *runn
     pfd.fd = fd;
     pfd.events = POLLIN | POLLERR | POLLHUP; // Monitor for input, errors, and hangups
 
-    while (running)
+    while (*running)
     {
         // Use poll to wait for data or timeout
         int poll_result = poll(&pfd, 1, 100); // Wait for 100 milliseconds
@@ -99,44 +102,81 @@ int thermo_client_read(int fd, thermal_data_s *data, volatile sig_atomic_t *runn
             // An error or hangup occurred, return -1
             return -1;
         }
-        bytes_read = read(fd, &check, sizeof(check));
-        if (bytes_read < 0)
+        if (!desc->synced)
         {
-            return bytes_read; // Error reading from the file descriptor
+            bytes_read = read(fd, &check, sizeof(check));
+            if (bytes_read < 0)
+            {
+                return bytes_read; // Error reading from the file descriptor
+            }
+            else if (bytes_read == 0)
+            {
+                continue;
+            }
+            // printf("Received: %c", check);
+            if (check == pattern[index]) // is it the start of a valid message?
+            {
+                index++;
+            }
+            else
+            {
+                index = 0; // Reset index if the character does not match
+            }
+            if (index == pattern_length) // If we have matched the entire pattern
+            {
+                // Read the next 11 bytes for type, source, and value
+                uint8_t buffer[sizeof(data->type) + 1 + sizeof(data->source) + sizeof(data->value)]; // 1 byte for type, 1 byte for comma, 4 bytes for source, 4 bytes for value
+
+                bytes_read = read(fd, buffer, sizeof(buffer));
+                if (bytes_read < 0)
+                {
+                    return -1; // Error or no data
+                }
+                else if (bytes_read < (ssize_t)sizeof(buffer) || buffer[1] != ',') // Check if we have enough data and the second byte is a comma
+                {
+                    return 0; // Incomplete data
+                }
+                // Now we have a complete message, parse it
+                data->type = buffer[0];                                    // First byte is type
+                memcpy(&(data->source), buffer + 2, sizeof(data->source)); // Next byte is comma, then 4 bytes for source
+                memcpy(&(data->value), buffer + 6, sizeof(data->value));   // Last 4 bytes for value
+                
+                desc->synced = 1;                                          // indicate we are synchronized
+
+                break; // Exit the loop after reading a complete message
+            }
         }
-        else if (bytes_read == 0)
+        else if (desc->synced == 1)
         {
-            continue;
-        }
-        // printf("Received: %c", check);
-        if (check == pattern[index]) // is it the start of a valid message?
-        {
-            index++;
+            uint8_t buffer[16] = {0, };
+            bytes_read = 0;
+            while (bytes_read < (ssize_t) sizeof(buffer) && *running)
+            {
+                ssize_t n = read(fd, buffer + bytes_read, sizeof(buffer) - bytes_read);
+                if (n < 0)
+                {
+                    desc->synced = 0;
+                    return n;
+                }
+                bytes_read += n;
+            }
+            for (ssize_t i = 0; i < (ssize_t) strlen(pattern); i++)
+            {
+                if (buffer[i] != pattern[i])
+                {
+                    desc->synced = 0;
+                    return -1;
+                }
+                // Now we have a complete message, parse it
+                size_t ofst = strlen(pattern);
+                data->type = buffer[ofst];                                    // First byte is type
+                memcpy(&(data->source), buffer + ofst + 2, sizeof(data->source)); // Next byte is comma, then 4 bytes for source
+                memcpy(&(data->value), buffer + ofst + 6, sizeof(data->value));   // Last 4 bytes for value
+            }
         }
         else
         {
-            index = 0; // Reset index if the character does not match
-        }
-        if (index == pattern_length) // If we have matched the entire pattern
-        {
-            // Read the next 11 bytes for type, source, and value
-            uint8_t buffer[sizeof(data->type) + 1 + sizeof(data->source) + sizeof(data->value)]; // 1 byte for type, 1 byte for comma, 4 bytes for source, 4 bytes for value
-
-            bytes_read = read(fd, buffer, sizeof(buffer));
-            if (bytes_read < 0)
-            {
-                return -1; // Error or no data
-            }
-            else if (bytes_read < (ssize_t)sizeof(buffer) || buffer[1] != ',') // Check if we have enough data and the second byte is a comma
-            {
-                return 0; // Incomplete data
-            }
-            // Now we have a complete message, parse it
-            data->type = buffer[0];                                    // First byte is type
-            memcpy(&(data->source), buffer + 2, sizeof(data->source)); // Next byte is comma, then 4 bytes for source
-            memcpy(&(data->value), buffer + 6, sizeof(data->value));   // Last 4 bytes for value
-
-            break; // Exit the loop after reading a complete message
+            return -1; // Error: Invalid boolean
         }
     }
 

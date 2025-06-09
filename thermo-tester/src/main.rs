@@ -79,7 +79,7 @@ fn init(path: String, read: bool) {
         .collect::<Vec<_>>();
     println!("Enumerated devices: ");
     for (rom, hash) in roms {
-        println!("\t0x{rom:016} -> 0x{hash:08}");
+        println!("\t0x{rom:016x} -> 0x{hash:08x}");
     }
     temp_sensors
         .enable_overdrive(&mut ds2484)
