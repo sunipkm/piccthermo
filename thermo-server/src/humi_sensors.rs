@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use hdc1010::{AcquisitionMode, Hdc1010Builder, SlaveAddress as H10SlaveAddress, Trigger};
+use hdc1010::{Hdc1010Builder, SlaveAddress as H10SlaveAddress, Trigger};
 use linux_embedded_hal::{Delay, I2cdev};
 
 use crate::{Measurement, safe_mpsc};
@@ -36,8 +36,7 @@ pub fn humidity_thread(
             .filter_map(|addr| {
                 match Hdc1010Builder::default()
                     .with_address(*addr)
-                    .with_mode(AcquisitionMode::Separate)
-                    .build(&mut i2c)
+                    .build_mode_separate(&mut i2c)
                 {
                     Ok(mut hdc) => {
                         log::info!(

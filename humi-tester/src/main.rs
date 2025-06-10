@@ -38,8 +38,7 @@ fn init(path: String) {
         .filter_map(|addr| {
             match Hdc1010Builder::default()
                 .with_address(*addr)
-                .with_mode(hdc1010::AcquisitionMode::Separate)
-                .build(&mut i2c)
+                .build_mode_separate(&mut i2c)
             {
                 Ok(mut hdc) => {
                     println!("[HUM] Device found at address {:02x}", hdc.get_address());

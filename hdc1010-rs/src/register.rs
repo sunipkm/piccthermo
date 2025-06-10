@@ -10,14 +10,14 @@ pub(crate) trait Hdc1010Register: Default {
     const ADDRESS: u8;
     const REGISTER_LEN: usize;
 
-    fn read<T: I2c<SevenBitAddress>>(
+    fn read<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>>;
-    fn write<T: I2c<SevenBitAddress>>(
+    fn write<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        _hdc: &mut Hdc1010<T>,
+        _hdc: &mut Hdc1010<U>,
         _i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         Err(Error::ReadOnly)
@@ -27,8 +27,6 @@ pub(crate) trait Hdc1010Register: Default {
 #[derive(Debug, PartialEq)]
 /// Trigger a measurement for either temperature or humidity.
 pub enum Trigger {
-    /// Trigger a measurement for both temperature and humidity.
-    Both,
     /// Trigger a temperature measurement.
     Temperature,
     /// Trigger a humidity measurement.
@@ -54,9 +52,9 @@ impl Hdc1010Register for Temperature {
 
     const REGISTER_LEN: usize = 2;
 
-    fn read<T: I2c<SevenBitAddress>>(
+    fn read<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
@@ -65,12 +63,11 @@ impl Hdc1010Register for Temperature {
         Ok(())
     }
 
-    fn write<T: I2c<SevenBitAddress>>(
+    fn write<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
-        println!("0x{:02x}> Writing to 0x{:02x}", hdc.address, Self::ADDRESS);
         i2c.write(hdc.address, &[Self::ADDRESS])?;
         Ok(())
     }
@@ -94,9 +91,9 @@ impl Hdc1010Register for Humidity {
 
     const REGISTER_LEN: usize = 2;
 
-    fn read<T: I2c<SevenBitAddress>>(
+    fn read<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
@@ -105,12 +102,11 @@ impl Hdc1010Register for Humidity {
         Ok(())
     }
 
-    fn write<T: I2c<SevenBitAddress>>(
+    fn write<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
-        println!("0x{:02x}> Writing to 0x{:02x}", hdc.address, Self::ADDRESS);
         i2c.write(hdc.address, &[Self::ADDRESS])?;
         Ok(())
     }
@@ -126,8 +122,8 @@ pub struct Configuration {
     pub temperature_resolution: TemperatureResolution,
     #[bits(1, access=RO)]
     pub power_ok: bool,
-    #[bits(1, default = AcquisitionMode::Both)]
-    pub mode: AcquisitionMode,
+    #[bits(1, default = AcquisitionModeEnum::Both)]
+    pub mode: AcquisitionModeEnum,
     #[bits(1, default = false)]
     pub heater_enable: bool,
     #[bits(1, default=0, access=RO)]
@@ -139,7 +135,7 @@ pub struct Configuration {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 /// Acquisition mode for the HDC1010 sensor.
-pub enum AcquisitionMode {
+pub enum AcquisitionModeEnum {
     #[default]
     /// Both temperature and humidity are acquired in sequence.
     Both = 0b0,
@@ -147,19 +143,19 @@ pub enum AcquisitionMode {
     Separate = 0b1,
 }
 
-impl AcquisitionMode {
+impl AcquisitionModeEnum {
     pub(crate) const fn from_bits(bits: u8) -> Self {
         match bits {
-            0b0 => AcquisitionMode::Both,
-            0b1 => AcquisitionMode::Separate,
+            0b0 => AcquisitionModeEnum::Both,
+            0b1 => AcquisitionModeEnum::Separate,
             _ => panic!("Invalid AcquisitionMode bits"),
         }
     }
 
     pub(crate) const fn into_bits(self) -> u8 {
         match self {
-            AcquisitionMode::Both => 0b0,
-            AcquisitionMode::Separate => 0b1,
+            AcquisitionModeEnum::Both => 0b0,
+            AcquisitionModeEnum::Separate => 0b1,
         }
     }
 }
@@ -169,9 +165,9 @@ impl Hdc1010Register for Configuration {
 
     const REGISTER_LEN: usize = 2;
 
-    fn read<T: I2c<SevenBitAddress>>(
+    fn read<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
@@ -180,9 +176,9 @@ impl Hdc1010Register for Configuration {
         Ok(())
     }
 
-    fn write<T: I2c<SevenBitAddress>>(
+    fn write<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let buffer = self.into_bits().to_be_bytes();
@@ -281,9 +277,9 @@ impl Hdc1010Register for SerialId {
     const ADDRESS: u8 = 0xFB;
     const REGISTER_LEN: usize = 6;
 
-    fn read<T: I2c<SevenBitAddress>>(
+    fn read<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
@@ -305,9 +301,9 @@ impl Hdc1010Register for ManufacturerId {
     const ADDRESS: u8 = 0xFE;
     const REGISTER_LEN: usize = 2;
 
-    fn read<T: I2c<SevenBitAddress>>(
+    fn read<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
@@ -327,9 +323,9 @@ impl Hdc1010Register for DeviceId {
     const ADDRESS: u8 = 0xFF;
     const REGISTER_LEN: usize = 2;
 
-    fn read<T: I2c<SevenBitAddress>>(
+    fn read<T: I2c<SevenBitAddress>, U>(
         &mut self,
-        hdc: &mut Hdc1010<T>,
+        hdc: &mut Hdc1010<U>,
         i2c: &mut T,
     ) -> Result<(), Error<T::Error>> {
         let mut buffer = [0u8; Self::REGISTER_LEN];
