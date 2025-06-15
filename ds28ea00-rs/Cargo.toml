@@ -7,6 +7,6 @@ description = "A no-std driver implementation of the Analog Devices DS28EA00 tem
 authors = ["Sunip K. Mukherjee <sunipkmukherjee@gmail.com>"]
 
 [dependencies]
-embedded-onewire = { version = "0.0.1", default-features = false }
+embedded-onewire = { workspace = true, default-features = false }
 fixed = { version = "1" }
 embedded-hal = "1.0"

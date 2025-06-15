@@ -4,11 +4,11 @@ version = "0.0.1"
 edition = "2024"
 
 [dependencies]
-embedded-onewire = { version = "0.0.1", default-features = false, features = [
+embedded-onewire = { workspace = true, default-features = false, features = [
     "crc-table",
 ] }
 embedded-hal = { version = "1.0", default-features = false }
-ds2484 = { version = "0.0.1" }
+ds2484 = { workspace = true }
 ds28ea00 = { path = "../ds28ea00-rs" }
 hdc1010 = { path = "../hdc1010-rs" }
 linux-embedded-hal = { version = "0.4", default-features = false, features = [
