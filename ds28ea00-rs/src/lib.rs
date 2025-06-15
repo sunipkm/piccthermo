@@ -268,6 +268,43 @@ impl<const N: usize> Ds28ea00Group<N> {
         }
         Ok(())
     }
+
+    /// Turn on the LED of a DS28EA00 device.
+    /// 
+    /// # Arguments
+    /// * `rom` - The ROM address of the DS28EA00 device.
+    /// * `bus` - A mutable reference to a type that implements the [`OneWire`] trait.
+    /// * `enable` - A boolean indicating whether to turn the LED on (`true`) or off (`false`).
+    pub fn led_toggle<O: OneWire> (&self, rom: u64, bus: &mut O, enable: bool) -> OneWireResult<(), O::BusError> {
+        Self::address_one(bus, rom, self.overdrive)?;
+        bus.write_byte(DS28EA00_TOGGLE_PIO)?;
+        if !enable {
+            bus.write_byte(DS28EA00_TOGGLE_PIO_ON)?;
+            bus.write_byte(DS28EA00_TOGGLE_PIO_OFF)?;
+        } else {
+            bus.write_byte(DS28EA00_TOGGLE_PIO_OFF)?;
+            bus.write_byte(DS28EA00_TOGGLE_PIO_ON)?;
+        }
+        Ok(())
+    }
+
+    /// Turn the LED of all DS28EA00 devices in the group on or off.
+    /// 
+    /// # Arguments
+    /// * `bus` - A mutable reference to a type that implements the [`OneWire`] trait.
+    /// * `enable` - A boolean indicating whether to turn the LED on (`true`) or off (`false`).
+    pub fn led_toggle_all<O: OneWire>(&self, bus: &mut O, enable: bool) -> OneWireResult<(), O::BusError> {
+        Self::address_any(bus, self.overdrive)?;
+        bus.write_byte(DS28EA00_TOGGLE_PIO)?;
+        if !enable {
+            bus.write_byte(DS28EA00_TOGGLE_PIO_ON)?;
+            bus.write_byte(DS28EA00_TOGGLE_PIO_OFF)?;
+        } else {
+            bus.write_byte(DS28EA00_TOGGLE_PIO_OFF)?;
+            bus.write_byte(DS28EA00_TOGGLE_PIO_ON)?;
+        }
+        Ok(())
+    }
 }
 
 /// Temperature data type used by the DS28EA00 devices.
