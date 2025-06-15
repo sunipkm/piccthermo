@@ -19,3 +19,4 @@ fixed = { version = "1.29", features = ["num-traits"] }
 num-traits = "0.2"
 crc32fast = "1.4"
 cursive = { version = "0.21", default-features = false, features = ["termion-backend"] }
+glob = { version = "0.3" }
