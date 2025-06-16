@@ -91,6 +91,7 @@ impl<const N: usize> Ds28ea00Group<N> {
     /// # Returns
     /// A result containing the number of devices found and configured, or an error if the operation fails.
     pub fn enumerate<O: OneWire>(&mut self, bus: &mut O) -> OneWireResult<usize, O::BusError> {
+        self.devices = 0; // reset device count
         let mut search = OneWireSearch::with_family(bus, OneWireSearchKind::Normal, Self::family());
         // conduct search
         while let Some(rom) = search.next()? {

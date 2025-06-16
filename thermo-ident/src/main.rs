@@ -1,6 +1,5 @@
 use cursive::{
-    With,
-    views::{self, Dialog, ListView},
+    view::Resizable, views::{self, Dialog, ListView}, With
 };
 use ds28ea00::Ds28ea00Group;
 use ds2484::{Ds2484, Interact};
@@ -37,28 +36,28 @@ fn main() {
             let path = path.clone();
             tree.add_child(
                 format!("I2C Bus {}", idx + 1),
-                views::Button::new(path.clone(), move |s| {
-                    log::info!("[TMP] Selected I2C Bus: {}", path);
-                    // s.pop_layer();
-                    if let Some(subtree) = s.with_user_data(|sensors: &mut TempSensors| {
-                        log::info!("[TMP] Selected I2C Bus: {}", path);
-                        ListView::new().with(|stree| {
-                            let sensor = &sensors.sensors[idx];
-                            for (i, sensor) in sensor.roms().enumerate() {
-                                let sensor_id = sensor;
-                                let sensor_hash = crc32fast::hash(
-                                    &((sensor_id & 0x00ffffff_ffffffff) >> 8).to_le_bytes(),
-                                );
-                                stree.add_child(
-                                    format!(
-                                        "[Sensor {}] 0x{:08x} [0x:{:016x}]",
-                                        i + 1,
-                                        sensor_hash,
-                                        sensor_id
-                                    ),
-                                    views::LinearLayout::horizontal()
-                                        .child(views::Button::new("ON", move |s| {
-                                            s.with_user_data(|sensors: &mut TempSensors| {
+                views::LinearLayout::horizontal()
+                    .child(views::Button::new(path.clone(), move |s| {
+                        log::info!("[TMP] Selected I2C Bus: {}", &path);
+                        if let Some(subtree) = s.with_user_data(|sensors: &mut TempSensors| {
+                            log::info!("[TMP] Selected I2C Bus: {}", &path);
+                            ListView::new().with(|stree| {
+                                let sensor = &sensors.sensors[idx];
+                                for (i, sensor) in sensor.roms().enumerate() {
+                                    let sensor_id = sensor;
+                                    let sensor_hash = crc32fast::hash(
+                                        &((sensor_id & 0x00ffffff_ffffffff) >> 8).to_le_bytes(),
+                                    );
+                                    stree.add_child(
+                                        format!(
+                                            "[Sensor {}] 0x{:08x} [0x:{:016x}]",
+                                            i + 1,
+                                            sensor_hash,
+                                            sensor_id
+                                        ),
+                                        views::LinearLayout::horizontal()
+                                            .child(views::Button::new("ON", move |s| {
+                                                s.with_user_data(|sensors: &mut TempSensors| {
                                                 sensors.toggle_led(idx, i, true);
                                                 log::info!(
                                                     "[TMP] Toggled LED ON for sensor {} on bus {}",
@@ -66,9 +65,9 @@ fn main() {
                                                     idx
                                                 );
                                             });
-                                        }))
-                                        .child(views::Button::new("OFF", move |s| {
-                                            s.with_user_data(|sensors: &mut TempSensors| {
+                                            }).fixed_width(5))
+                                            .child(views::Button::new("OFF", move |s| {
+                                                s.with_user_data(|sensors: &mut TempSensors| {
                                                 sensors.toggle_led(idx, i, false);
                                                 log::info!(
                                                     "[TMP] Toggled LED OFF for sensor {} on bus {}",
@@ -76,21 +75,41 @@ fn main() {
                                                     idx
                                                 );
                                             });
-                                        })),
-                                );
+                                            }).fixed_width(5)),
+                                    );
+                                }
+                            })
+                        }) {
+                            s.add_layer(
+                                Dialog::new()
+                                    .title(format!("I2C Bus {}", idx + 1))
+                                    .content(subtree)
+                                    .button("Back", |s| {
+                                        s.pop_layer();
+                                    }),
+                            );
+                        }
+                    }).fixed_width(16))
+                    .child(views::Button::new("Enumerate", move |s| {
+                        s.with_user_data(|sensors: &mut TempSensors| {
+                            if let Some(sensor) = sensors.sensors.get_mut(idx) {
+                                if let Err(e) = sensor.enumerate(&mut sensors.buses[idx]) {
+                                    log::error!(
+                                        "[TMP] Failed to enumerate sensors on bus {}: {:?}",
+                                        idx,
+                                        e
+                                    );
+                                } else {
+                                    log::info!(
+                                        "[TMP] Successfully enumerated sensors on bus {}",
+                                        idx
+                                    );
+                                }
+                            } else {
+                                log::warn!("[TMP] No sensors found for bus {}", idx);
                             }
-                        })
-                    }) {
-                        s.add_layer(
-                            Dialog::new()
-                                .title(format!("I2C Bus {}", idx + 1))
-                                .content(subtree)
-                                .button("Back", |s| {
-                                    s.pop_layer();
-                                }),
-                        );
-                    }
-                }),
+                        });
+                    })),
             );
         }
     });
