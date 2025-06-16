@@ -1,4 +1,7 @@
-use cursive::views;
+use cursive::{
+    With,
+    views::{self, Dialog, ListView},
+};
 use ds28ea00::Ds28ea00Group;
 use ds2484::{Ds2484, Interact};
 
@@ -24,9 +27,75 @@ fn main() {
 
     // Add a global callback for '~' to toggle the debug console.
     siv.add_global_callback('~', cursive::Cursive::toggle_debug_console);
+    siv.add_global_callback('`', cursive::Cursive::toggle_debug_console);
 
-    siv.add_layer(views::Dialog::text("Try pressing Ctrl-C!"));
+    let sensors = TempSensors::new();
+    let paths = sensors.paths.clone();
+    siv.set_user_data(sensors);
+    let list = ListView::new().with(|tree| {
+        for (idx, path) in paths.iter().enumerate() {
+            let path = path.clone();
+            tree.add_child(
+                format!("I2C Bus {}", idx + 1),
+                views::Button::new(path.clone(), move |s| {
+                    log::info!("[TMP] Selected I2C Bus: {}", path);
+                    // s.pop_layer();
+                    if let Some(subtree) = s.with_user_data(|sensors: &mut TempSensors| {
+                        log::info!("[TMP] Selected I2C Bus: {}", path);
+                        ListView::new().with(|stree| {
+                            let sensor = &sensors.sensors[idx];
+                            for (i, sensor) in sensor.roms().enumerate() {
+                                let sensor_id = sensor;
+                                let sensor_hash = crc32fast::hash(
+                                    &((sensor_id & 0x00ffffff_ffffffff) >> 8).to_le_bytes(),
+                                );
+                                stree.add_child(
+                                    format!(
+                                        "[Sensor {}] 0x{:08x} [0x:{:016x}]",
+                                        i + 1,
+                                        sensor_hash,
+                                        sensor_id
+                                    ),
+                                    views::LinearLayout::horizontal()
+                                        .child(views::Button::new("ON", move |s| {
+                                            s.with_user_data(|sensors: &mut TempSensors| {
+                                                sensors.toggle_led(idx, i, true);
+                                                log::info!(
+                                                    "[TMP] Toggled LED ON for sensor {} on bus {}",
+                                                    i,
+                                                    idx
+                                                );
+                                            });
+                                        }))
+                                        .child(views::Button::new("OFF", move |s| {
+                                            s.with_user_data(|sensors: &mut TempSensors| {
+                                                sensors.toggle_led(idx, i, false);
+                                                log::info!(
+                                                    "[TMP] Toggled LED OFF for sensor {} on bus {}",
+                                                    i,
+                                                    idx
+                                                );
+                                            });
+                                        })),
+                                );
+                            }
+                        })
+                    }) {
+                        s.add_layer(
+                            Dialog::new()
+                                .title(format!("I2C Bus {}", idx + 1))
+                                .content(subtree)
+                                .button("Back", |s| {
+                                    s.pop_layer();
+                                }),
+                        );
+                    }
+                }),
+            );
+        }
+    });
 
+    siv.add_layer(Dialog::new().title("I2C Buses").content(list));
     siv.run();
 }
 
@@ -40,60 +109,138 @@ fn add_quit_layer(s: &mut cursive::Cursive) {
     )
 }
 
-struct TempSensors {
-    controllers: Vec<(
-        Ds2484<linux_embedded_hal::I2cdev, linux_embedded_hal::Delay>,
-        Option<Ds28ea00Group<32>>,
-    )>,
+pub struct TempSensors {
+    pub paths: Vec<String>,
+    pub buses: Vec<Ds2484<linux_embedded_hal::I2cdev, linux_embedded_hal::Delay>>,
+    pub sensors: Vec<ds28ea00::Ds28ea00Group<32>>,
 }
 
 use glob::glob;
 impl TempSensors {
     fn new() -> Self {
-        let val = glob("/dev/i2c-*")
-            .expect("Failed to find I2C devices")
-            .filter_map(Result::ok)
-            .filter_map(|path| {
-                let delay = linux_embedded_hal::Delay;
-                if let Ok(i2c) = linux_embedded_hal::I2cdev::new(&path) {
-                    if let Ok(mut ds2484) = ds2484::Ds2484Builder::default().build(i2c, delay) {
-                        let mut cfg = ds2484::DeviceConfiguration::default();
-                        if let Err(e) = cfg.read(&mut ds2484) {
-                            log::error!("[TMP] Failed to read device configuration: {e:?}",);
-                            return None;
+        let mut paths = Vec::new();
+        let mut buses = Vec::new();
+        let mut sensors = Vec::new();
+
+        for path in glob("/dev/i2c-*").expect("Failed to find I2C devices") {
+            match path {
+                Ok(path) => {
+                    let lpath = path.to_string_lossy();
+                    log::info!("[TMP] Found I2C device: {lpath}");
+                    match linux_embedded_hal::I2cdev::new(&path) {
+                        Err(e) => {
+                            log::error!("[TMP] {lpath}> Failed to open I2C device: {e:?}");
+                            continue;
                         }
-                        cfg.set_active_pullup(true);
-                        if let Err(e) = cfg.write(&mut ds2484) {
-                            log::error!("[TMP] Failed to write device configuration: {e:?}",);
-                            return None;
+                        Ok(i2c) => {
+                            match ds2484::Ds2484Builder::default()
+                                .build(i2c, linux_embedded_hal::Delay)
+                            {
+                                Err(e) => {
+                                    log::error!(
+                                        "[TMP] {lpath}> Failed to create DS2484 instance: {e:?}"
+                                    );
+                                    continue;
+                                }
+                                Ok(mut ds2484) => {
+                                    log::info!(
+                                        "[TMP] {lpath}> DS2484 instance created successfully"
+                                    );
+                                    let mut cfg = ds2484::DeviceConfiguration::default();
+                                    if let Err(e) = cfg.read(&mut ds2484) {
+                                        log::error!(
+                                            "[TMP] {lpath}> Failed to read device configuration: {e:?}",
+                                        );
+                                        continue;
+                                    }
+                                    cfg.set_active_pullup(true);
+                                    if let Err(e) = cfg.write(&mut ds2484) {
+                                        log::error!(
+                                            "[TMP] {lpath}> Failed to write device configuration: {e:?}",
+                                        );
+                                        continue;
+                                    }
+                                    // Set the port configuration
+                                    let mut port_cfg =
+                                        ds2484::OneWireConfigurationBuilder::default()
+                                            .reset_pulse(440000, 44000)
+                                            .presence_detect_time(58000, 5500)
+                                            .write_zero_low_time(52000, 5000)
+                                            .write_zero_recovery_time(2750)
+                                            .weak_pullup_resistor(1000)
+                                            .build();
+                                    if let Err(e) = port_cfg.write(&mut ds2484) {
+                                        log::error!(
+                                            "[TMP] {lpath}> Failed to write port configuration: {e:?}",
+                                        );
+                                        continue;
+                                    } else {
+                                        log::info!(
+                                            "[TMP] {lpath}> Port configuration written successfully"
+                                        );
+                                    }
+                                    let mut tmpsensors =
+                                        Ds28ea00Group::default().with_toggle_pio(false);
+                                    match tmpsensors.enumerate(&mut ds2484) {
+                                        Ok(n) => {
+                                            log::info!("[TMP] {lpath}> Found {n} sensors");
+                                        }
+                                        Err(e) => {
+                                            log::error!(
+                                                "[TMP] {lpath}> Failed to enumerate sensors: {e:?}"
+                                            );
+                                        }
+                                    }
+                                    paths.push(lpath.to_string());
+                                    buses.push(ds2484);
+                                    sensors.push(tmpsensors);
+                                }
+                            }
                         }
-                        // Set the port configuration
-                        let mut port_cfg = ds2484::OneWireConfigurationBuilder::default()
-                            .reset_pulse(440000, 44000)
-                            .presence_detect_time(58000, 5500)
-                            .write_zero_low_time(52000, 5000)
-                            .write_zero_recovery_time(2750)
-                            .weak_pullup_resistor(1000)
-                            .build();
-                        if let Err(e) = port_cfg.write(&mut ds2484) {
-                            log::error!("[TMP] Failed to write port configuration: {e:?}",);
-                            return None;
-                        } else {
-                            log::info!("[TMP] Port configuration written successfully");
-                        }
-                        Some((ds2484, None))
-                    } else {
+                    }
+                }
+                Err(e) => log::error!("Failed to read glob pattern: {}", e),
+            }
+        }
+
+        log::info!("[TMP] Found {} I2C devices", buses.len());
+        TempSensors {
+            paths,
+            buses,
+            sensors,
+        }
+    }
+
+    pub fn toggle_led(&mut self, bus_idx: usize, sensor_idx: usize, enable: bool) {
+        if let Some(bus) = self.buses.get_mut(bus_idx) {
+            if let Some(sensor) = self.sensors.get_mut(bus_idx) {
+                if let Some(rom) = sensor.roms().nth(sensor_idx) {
+                    // Toggle the LED for the specified sensor
+                    if let Err(e) = sensor.led_toggle(bus, rom, enable) {
                         log::error!(
-                            "[TMP] Failed to create DS2484 instance for path: {}",
-                            path.display()
+                            "[TMP] Failed to toggle LED for sensor {}: {:?}",
+                            sensor_idx,
+                            e
                         );
-                        None
+                    } else {
+                        log::info!(
+                            "[TMP] Successfully toggled LED for sensor {} on bus {}",
+                            sensor_idx,
+                            bus_idx
+                        );
                     }
                 } else {
-                    None
+                    log::warn!(
+                        "[TMP] No sensor found at index {} on bus {}",
+                        sensor_idx,
+                        bus_idx
+                    );
                 }
-            })
-            .collect::<Vec<_>>();
-        TempSensors { controllers: val }
+            } else {
+                log::warn!("[TMP] No sensors found for bus {}", bus_idx);
+            }
+        } else {
+            log::warn!("[TMP] No bus found at index {}", bus_idx);
+        }
     }
 }
