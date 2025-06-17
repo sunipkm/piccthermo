@@ -1,5 +1,7 @@
 use cursive::{
-    view::Resizable, views::{self, Dialog, ListView}, With
+    With,
+    view::Resizable,
+    views::{self, Dialog, ListView},
 };
 use ds28ea00::Ds28ea00Group;
 use ds2484::{Ds2484, Interact};
@@ -37,23 +39,25 @@ fn main() {
             tree.add_child(
                 format!("I2C Bus {}", idx + 1),
                 views::LinearLayout::horizontal()
-                    .child(views::Button::new(path.clone(), move |s| {
-                        log::info!("[TMP] Selected I2C Bus: {}", &path);
-                        if let Some(subtree) = s.with_user_data(|sensors: &mut TempSensors| {
+                    .child(
+                        views::Button::new(path.clone(), move |s| {
                             log::info!("[TMP] Selected I2C Bus: {}", &path);
-                            ListView::new().with(|stree| {
-                                let sensor = &sensors.sensors[idx];
-                                for (i, sensor) in sensor.roms().enumerate() {
-                                    let sensor_id = sensor;
-                                    let sensor_hash = crc32fast::hash(
-                                        &((sensor_id & 0x00ffffff_ffffffff) >> 8).to_le_bytes(),
-                                    );
-                                    stree.add_child(
+                            if let Some(subtree) = s.with_user_data(|sensors: &mut TempSensors| {
+                                log::info!("[TMP] Selected I2C Bus: {}", &path);
+                                ListView::new().with(|stree| {
+                                    let sensor = &sensors.sensors[idx];
+                                    let ndigits = sensor.roms().count().checked_ilog10().unwrap_or(0) as usize + 1;
+                                    for (i, sensor) in sensor.roms().enumerate() {
+                                        let sensor_id = sensor;
+                                        let sensor_hash = crc32fast::hash(
+                                            &((sensor_id & 0x00ffffff_ffffffff) >> 8).to_le_bytes(),
+                                        );
+                                        stree.add_child(
                                         format!(
-                                            "[Sensor {}] 0x{:08x} [0x:{:016x}]",
+                                            "[Sensor {:ndigits$}] 0x{:016x} 0x{:08x}",
                                             i + 1,
+                                            sensor_id,
                                             sensor_hash,
-                                            sensor_id
                                         ),
                                         views::LinearLayout::horizontal()
                                             .child(views::Button::new("ON", move |s| {
@@ -77,19 +81,39 @@ fn main() {
                                             });
                                             }).fixed_width(5)),
                                     );
-                                }
-                            })
-                        }) {
-                            s.add_layer(
-                                Dialog::new()
-                                    .title(format!("I2C Bus {}", idx + 1))
-                                    .content(subtree)
-                                    .button("Back", |s| {
-                                        s.pop_layer();
-                                    }),
-                            );
-                        }
-                    }).fixed_width(16))
+                                    }
+                                })
+                            }) {
+                                s.add_layer(
+                                    Dialog::new()
+                                        .title(format!("I2C Bus {}", idx + 1))
+                                        .content(subtree)
+                                        .button("All ON", move |s| {
+                                            s.with_user_data(|sensors: &mut TempSensors| {
+                                                sensors.toggle_led_all(idx, true);
+                                                log::info!(
+                                                    "[TMP] Toggled all LEDs ON for bus {}",
+                                                    idx
+                                                );
+                                            });
+                                        })
+                                        .button("All OFF", move |s| {
+                                            s.with_user_data(|sensors: &mut TempSensors| {
+                                                sensors.toggle_led_all(idx, false);
+                                                log::info!(
+                                                    "[TMP] Toggled all LEDs OFF for bus {}",
+                                                    idx
+                                                );
+                                            });
+                                        })
+                                        .button("Back", |s| {
+                                            s.pop_layer();
+                                        }),
+                                );
+                            }
+                        })
+                        .fixed_width(16),
+                    )
                     .child(views::Button::new("Enumerate", move |s| {
                         s.with_user_data(|sensors: &mut TempSensors| {
                             if let Some(sensor) = sensors.sensors.get_mut(idx) {
@@ -260,6 +284,22 @@ impl TempSensors {
             }
         } else {
             log::warn!("[TMP] No bus found at index {}", bus_idx);
+        }
+    }
+
+    pub fn toggle_led_all(&mut self, bus_idx: usize, enable: bool) {
+        if let Some(bus) = self.buses.get_mut(bus_idx) {
+            if let Some(sensors) = self.sensors.get_mut(bus_idx) {
+                if let Err(e) = sensors.led_toggle_all(bus, enable) {
+                    log::error!(
+                        "[TMP] Failed to toggle all LEDs on bus {}: {:?}",
+                        bus_idx,
+                        e
+                    );
+                } else {
+                    log::info!("[TMP] Successfully toggled all LEDs on bus {}", bus_idx);
+                }
+            }
         }
     }
 }
