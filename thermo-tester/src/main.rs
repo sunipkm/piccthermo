@@ -13,8 +13,12 @@ struct Args {
     /// Path to I2C bus (e.g., /dev/i2c-1)
     #[arg(short, long)]
     path: String,
+    /// Read temperatures from the sensors
     #[arg(long, default_value = "false")]
     read: bool,
+    /// Exclusion filter
+    #[arg(long, default_value_t = String::from(""))]
+    exclude: String,
 }
 
 fn main() {
@@ -22,10 +26,25 @@ fn main() {
     env_logger::init();
     // Parse command line arguments
     let args = Args::parse();
-    init(args.path, args.read);
+    // Exclusion filter
+    let mut exclude = Vec::new();
+    if !args.exclude.is_empty() {
+        for item in args.exclude.split(',') {
+            let item = item.trim().split("0x").last().unwrap_or(item);
+            if let Ok(num) = u32::from_str_radix(item, 16) {
+                exclude.push(num);
+            } else {
+                log::warn!("[EXC] Invalid exclusion filter item: {item}");
+            }
+        }
+        log::info!("[EXC] Exclusion filter: {exclude:#?}");
+    } else {
+        log::info!("[EXC] No exclusion filter set.");
+    }
+    init(args.path, args.read, exclude);
 }
 
-fn init(path: String, read: bool) {
+fn init(path: String, read: bool, exclude: Vec<u32>) {
     println!("Opening bus {path}");
     // Open the I2C bus
     let mut i2c = I2cdev::new(&path).expect("Failed to open I2C device");
@@ -42,11 +61,11 @@ fn init(path: String, read: bool) {
         .expect("Failed to write device configuration");
     // Set the port configuration
     let mut port_cfg = ds2484::OneWireConfigurationBuilder::default()
-        .reset_pulse(440000, 44000)
-        .presence_detect_time(58000, 5500)
-        .write_zero_low_time(52000, 5000)
-        .write_zero_recovery_time(2750)
-        .weak_pullup_resistor(1000)
+        // .reset_pulse(440000, 44000)
+        // .presence_detect_time(58000, 5500)
+        // .write_zero_low_time(52000, 5000)
+        // .write_zero_recovery_time(2750)
+        // .weak_pullup_resistor(1000)
         .build();
     // Configure the DS2484 port
     port_cfg
@@ -79,11 +98,14 @@ fn init(path: String, read: bool) {
         .collect::<Vec<_>>();
     println!("Enumerated devices: ");
     for (rom, hash) in roms {
-        println!("\t0x{rom:016x} -> 0x{hash:08x}");
+        println!(
+            "\t0x{rom:016x} -> 0x{hash:08x} [Excluded: {}]",
+            exclude.contains(&hash)
+        );
     }
-    temp_sensors
-        .enable_overdrive(&mut ds2484)
-        .expect("Failed to enable overdrive mode");
+    if let Err(e) = temp_sensors.enable_overdrive(&mut ds2484) {
+        println!("Failed to enable overdrive mode: {e:?}");
+    };
     let mut status = ds2484::DeviceConfiguration::default();
     // Read the device configuration
     status
@@ -94,14 +116,21 @@ fn init(path: String, read: bool) {
     status
         .read(&mut ds2484)
         .expect("Failed to read device status");
+    println!("Device status: {:?}", status);
     if !status.presence() {
         println!("No devices are present after enabling overdrive mode.");
     } else if read {
         for _ in 0..10 {
-            read_sensors(&mut temp_sensors, &mut ds2484, &mut delay)
-                .expect("Failed to read sensors");
+            read_sensors(
+                &mut temp_sensors,
+                &mut ds2484,
+                &mut delay,
+                exclude.as_slice(),
+            )
+            .expect("Failed to read sensors");
         }
     }
+    println!("Disabling overdrive mode...");
     temp_sensors
         .disable_overdrive(&mut ds2484)
         .expect("Failed to disable overdrive mode");
@@ -112,8 +141,13 @@ fn init(path: String, read: bool) {
         println!("No devices are present after disabling overdrive mode!");
     } else if read {
         for _ in 0..10 {
-            read_sensors(&mut temp_sensors, &mut ds2484, &mut delay)
-                .expect("Failed to read sensors");
+            read_sensors(
+                &mut temp_sensors,
+                &mut ds2484,
+                &mut delay,
+                exclude.as_slice(),
+            )
+            .expect("Failed to read sensors");
         }
     }
 }
@@ -122,6 +156,7 @@ fn read_sensors(
     temp_sensors: &mut Ds28ea00Group<16>,
     ds2484: &mut Ds2484<&mut I2cdev, &mut Delay>,
     delay: &mut Delay,
+    exclude: &[u32],
 ) -> Result<
     (),
     Box<dyn std::error::Error + Send + Sync>,
@@ -141,10 +176,21 @@ fn read_sensors(
     let after_reading = std::time::Instant::now();
     let output = readout
         .iter()
-        .map(|(rom, temp)| format!("R{:02x}: {:.3}°C, ", rom.to_be_bytes()[0], f32::from(*temp)))
+        .filter_map(|(rom, temp)| {
+            let hash = crc32fast::hash(&((rom & 0x00ffffff_ffffffff) >> 8).to_le_bytes());
+            if exclude.contains(&hash) {
+                None
+            } else {
+                Some(format!(
+                    "R{:02x}: {:.3}°C, ",
+                    rom.to_be_bytes()[0],
+                    f32::from(*temp)
+                ))
+            }
+        })
         .collect::<Vec<_>>();
     let output = output.join(", ");
-    log::info!(
+    println!(
         "Mode: {}, Temperatures: {}, Conversion time: {:#?}, Read time: {:#?}",
         {
             if temp_sensors.overdrive() {

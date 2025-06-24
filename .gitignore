@@ -1,4 +1,5 @@
-/target
+**/target
 **/*.o
 thermo-client/thermo-client
 thermo-client/thermo-console
+data

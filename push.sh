@@ -33,6 +33,7 @@ fi
 scp target/$TARGET/release/thermo-tester pyro:~/thermo-server
 scp target/$TARGET/release/humi-tester pyro:~/thermo-server
 scp target/$TARGET/release/thermo-ident pyro:~/thermo-server
+scp target/$TARGET/release/thermo-cputemp pyro:~/thermo-server
 ssh -q pyro -t 'stat "thermo-server/thermo.env" &> /dev/null'
 if [ $? -ne 0 ]; then
     scp thermo.env thermo.service pyro:~/thermo-server

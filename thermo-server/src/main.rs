@@ -11,6 +11,7 @@ use std::{
 use clap::Parser;
 
 // Local imports
+mod cpu_sensors;
 mod data_format;
 mod humi_sensors;
 mod safe_mpsc;
@@ -42,6 +43,9 @@ struct Args {
     /// Enable LED control
     #[arg(long, default_value_t = false)]
     leds: bool,
+    /// Exclusion filter
+    #[arg(long, default_value_t = String::from(""))]
+    exclude: String,
 }
 
 fn main() {
@@ -54,6 +58,21 @@ fn main() {
     if !serial.exists() {
         log::error!("[COM] Fatal error: {} does not exist.", &args.serial);
         return;
+    }
+    // Exclusion filter
+    let mut exclude = Vec::new();
+    if !args.exclude.is_empty() {
+        for item in args.exclude.split(',') {
+            let item = item.trim().split("0x").last().unwrap_or(item);
+            if let Ok(num) = u32::from_str_radix(item, 16) {
+                exclude.push(num);
+            } else {
+                log::warn!("[MAIN] Invalid exclusion filter item: {item}");
+            }
+        }
+        log::info!("[MAIN] Exclusion filter: {exclude:#?}");
+    } else {
+        log::info!("[MAIN] No exclusion filter set.");
     }
     // Synchronizer
     let running = Arc::new(AtomicBool::new(true));
@@ -74,7 +93,7 @@ fn main() {
         thread::spawn(move || serial_comm::serial_thread(args.serial, running, data_rx))
     };
     // Spawn the temperature sensor threads
-    let temp_hdls = args
+    let mut temp_hdls = args
         .thermo_paths
         .iter()
         .filter_map(|path| {
@@ -82,14 +101,20 @@ fn main() {
             if path.exists() {
                 let running = running.clone();
                 let sink = data_tx.clone();
+                let exclude = exclude.clone();
                 Some(thread::spawn({
-                    move || onewire_thread(path, running, args.leds, sink)
+                    move || onewire_thread(path, running, args.leds, sink, exclude)
                 }))
             } else {
                 None
             }
         })
         .collect::<Vec<_>>();
+    temp_hdls.push(thread::spawn({
+        let running = running.clone();
+        let sink = data_tx.clone();
+        move || cpu_sensors::cputemp_thread(running, sink)
+    }));
     // Spawn humidity sensor threads if needed
     let hum_hdls = args
         .humidity_paths

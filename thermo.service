@@ -13,7 +13,7 @@ StartLimitIntervalSec=1
 Type=simple
 User=root
 EnvironmentFile=/home/picture/thermo-server/thermo.env
-ExecStart=/home/picture/thermo-server/thermo-server $THM_PATHS $HUM_PATHS $SER_PATH $LED
+ExecStart=/home/picture/thermo-server/thermo-server $THM_PATHS $HUM_PATHS $SER_PATH $EXCLUDED $LED
 Restart=always
 RestartSec=1
 

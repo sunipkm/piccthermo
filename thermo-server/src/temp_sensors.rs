@@ -19,6 +19,7 @@ pub fn onewire_thread(
     running: Arc<AtomicBool>,
     leds: bool,
     sink: safe_mpsc::SafeSender<Measurement>,
+    exclude: Vec<u32>,
 ) {
     let lpath = path.to_string_lossy();
     'root: while running.load(Ordering::Relaxed) {
@@ -136,14 +137,22 @@ pub fn onewire_thread(
                 }
             };
             // Send the readout data here
-            let data = readout
-                .iter()
-                .map(|(id, temp)| {
-                    let id = crc32fast::hash(&((id & 0x00ffffff_ffffffff) >> 8).to_le_bytes()); // strip the CRC and the family code bytes, and convert to u32 by calculating the CRC32 hash of the serial number bytes
-                    let temp = f32::from(*temp);
-                    (id, temp)
-                })
-                .collect::<Vec<_>>();
+            let data =
+                readout
+                    .iter()
+                    .filter_map(|(id, temp)| {
+                        let id = crc32fast::hash(&((id & 0x00ffffff_ffffffff) >> 8).to_le_bytes()); // strip the CRC and the family code bytes, and convert to u32 by calculating the CRC32 hash of the serial number bytes
+                        if exclude.contains(&id) {
+                            log::warn!(
+                                "[TMP] {lpath}> Excluding sensor with ID {id:08x} from readout",
+                            );
+                            None // skip excluded sensors
+                        } else {
+                            let temp = f32::from(*temp);
+                            Some((id, temp))
+                        }
+                    })
+                    .collect::<Vec<_>>();
             if let Err(e) = sink.send(Measurement::Temperature(data)) {
                 log::error!("[TMP] {lpath}> Failed to send data: {e:?}",);
                 continue 'readout; // probably the receiver has been dropped, meaning we are leaving

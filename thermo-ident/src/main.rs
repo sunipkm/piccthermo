@@ -2,6 +2,7 @@ use cursive::{
     With,
     view::Resizable,
     views::{self, Dialog, ListView},
+    reexports::log::LevelFilter
 };
 use ds28ea00::Ds28ea00Group;
 use ds2484::{Ds2484, Interact};
@@ -9,6 +10,7 @@ use ds2484::{Ds2484, Interact};
 fn main() {
     // Initialize the cursive logger.
     cursive::logger::init();
+    cursive::logger::set_internal_filter_level(LevelFilter::Info);
 
     // Create a new Cursive instance.
     let mut siv = cursive::default();
@@ -46,7 +48,10 @@ fn main() {
                                 log::info!("[TMP] Selected I2C Bus: {}", &path);
                                 ListView::new().with(|stree| {
                                     let sensor = &sensors.sensors[idx];
-                                    let ndigits = sensor.roms().count().checked_ilog10().unwrap_or(0) as usize + 1;
+                                    let ndigits =
+                                        sensor.roms().count().checked_ilog10().unwrap_or(0)
+                                            as usize
+                                            + 1;
                                     for (i, sensor) in sensor.roms().enumerate() {
                                         let sensor_id = sensor;
                                         let sensor_hash = crc32fast::hash(
@@ -79,7 +84,28 @@ fn main() {
                                                     idx
                                                 );
                                             });
-                                            }).fixed_width(5)),
+                                            }).fixed_width(5))
+                                            .child(views::Button::new("MEASURE", move |s| {
+                                                let res = s.with_user_data(|sensors: &mut TempSensors| {
+                                                    sensors.read_temperature(idx, i, true)
+                                                }).unwrap();
+                                                s.add_layer(
+                                                    Dialog::text(
+                                                        res.map_or_else(
+                                                            |e| format!("Error: {}", e),
+                                                            |temp| format!("Temperature: {:.2}°C", temp),
+                                                        ),
+                                                    ).title(format!(
+                                                        "Bus {:ndigits$} 0x{:016x} 0x{:08x}",
+                                                        i + 1,
+                                                        sensor_id,
+                                                        sensor_hash,
+                                                    ))
+                                                    .button("OK", |s| {
+                                                        s.pop_layer();
+                                                    }),
+                                                );
+                                            }).fixed_width(11)),
                                     );
                                     }
                                 })
@@ -159,6 +185,7 @@ pub struct TempSensors {
 }
 
 use glob::glob;
+use linux_embedded_hal::Delay;
 impl TempSensors {
     fn new() -> Self {
         let mut paths = Vec::new();
@@ -284,6 +311,59 @@ impl TempSensors {
             }
         } else {
             log::warn!("[TMP] No bus found at index {}", bus_idx);
+        }
+    }
+
+    pub fn read_temperature(
+        &mut self,
+        bus_idx: usize,
+        sensor_idx: usize,
+        crc: bool,
+    ) -> Result<f32, String> {
+        if let Some(bus) = self.buses.get_mut(bus_idx) {
+            if let Some(sensor) = self.sensors.get_mut(bus_idx) {
+                if let Some(rom) = sensor.roms().nth(sensor_idx) {
+                    match sensor.read_temperature(bus, &mut Delay, rom, crc) {
+                        Ok(temp) => {
+                            log::info!(
+                                "[TMP] Temperature for sensor {} on bus {}: {:.2}°C [{:?}]",
+                                sensor_idx,
+                                bus_idx,
+                                temp,
+                                temp
+                            );
+                            Ok(f32::from(temp))
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "[TMP] Failed to read temperature for sensor {}: {:?}",
+                                sensor_idx,
+                                e
+                            );
+                            Err(format!(
+                                "Failed to read temperature for sensor {}: {:?}",
+                                sensor_idx, e
+                            ))
+                        }
+                    }
+                } else {
+                    log::warn!(
+                        "[TMP] No sensor found at index {} on bus {}",
+                        sensor_idx,
+                        bus_idx
+                    );
+                    Err(format!(
+                        "No sensor found at index {} on bus {}",
+                        sensor_idx, bus_idx
+                    ))
+                }
+            } else {
+                log::warn!("[TMP] No sensors found for bus {}", bus_idx);
+                Err(format!("No sensors found for bus {}", bus_idx))
+            }
+        } else {
+            log::warn!("[TMP] No bus found at index {}", bus_idx);
+            Err(format!("No bus found at index {}", bus_idx))
         }
     }
 

@@ -22,3 +22,4 @@ fixed = { version = "1.29", features = ["num-traits"] }
 num-traits = "0.2"
 crc32fast = "1.4"
 ctrlc = "3.4"
+sysinfo = { version = "0.35", default-features = false, features = ["system", "component"]}

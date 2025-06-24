@@ -188,7 +188,7 @@ impl<const N: usize> Ds28ea00Group<N> {
         ignore_errors: bool,
     ) -> OneWireResult<&[(u64, Temperature)], O::BusError> {
         for (rom, temp) in self.roms[..self.devices].iter_mut() {
-            let res = Self::read_temperature(bus, *rom, temp, crc, self.toggle_pio);
+            let res = Self::read_temperature_internal(bus, *rom, temp, crc, self.toggle_pio);
             if let Err(e) = res {
                 if !ignore_errors {
                     return Err(e);
@@ -200,7 +200,30 @@ impl<const N: usize> Ds28ea00Group<N> {
         Ok(&self.roms[..self.devices])
     }
 
-    fn read_temperature<O: OneWire>(
+    /// Reads the temperature from a specific DS28EA00 device.
+    /// This method addresses the device by its ROM address, reads the temperature data,
+    /// and validates the CRC if requested.
+    /// # Arguments
+    /// * `bus` - A mutable reference to a type that implements the [`OneWire`]` trait.
+    /// * `rom` - The ROM address of the DS28EA00 device to read.
+    /// * `crc` - A boolean indicating whether to validate the CRC of the read data.
+    /// # Returns
+    /// A result containing the temperature reading, or an error if the operation fails.
+    ///
+    pub fn read_temperature<O: OneWire, D: DelayNs>(
+        &self,
+        bus: &mut O,
+        delay: &mut D,
+        rom: u64,
+        crc: bool,
+    ) -> OneWireResult<Temperature, O::BusError> {
+        let mut temp = Temperature::ZERO; // Initialize temperature
+        self.trigger_temperature_conversion(bus, delay)?; // Trigger temperature conversion
+        Self::read_temperature_internal(bus, rom, &mut temp, crc, self.toggle_pio)?; // Read temperature
+        Ok(temp)
+    }
+
+    fn read_temperature_internal<O: OneWire>(
         bus: &mut O,
         rom: u64,
         temp: &mut Temperature,
