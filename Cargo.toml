@@ -3,5 +3,5 @@ resolver = "3"
 members = ["ds28ea00-rs", "hdc1010-rs", "hdc3022-rs", "humi-tester", "thermo-cputemp", "thermo-ident", "thermo-server", "thermo-tester"]
 
 [workspace.dependencies]
-embedded-onewire = { version = "0.0.4", default-features = false }
-ds2484 = { version = "0.0.4", default-features = false }
+embedded-onewire = { version = "0.0.5", default-features = false }
+ds2484 = { version = "0.0.5", default-features = false }

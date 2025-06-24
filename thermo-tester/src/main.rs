@@ -61,11 +61,11 @@ fn init(path: String, read: bool, exclude: Vec<u32>) {
         .expect("Failed to write device configuration");
     // Set the port configuration
     let mut port_cfg = ds2484::OneWireConfigurationBuilder::default()
-        // .reset_pulse(440000, 44000)
-        // .presence_detect_time(58000, 5500)
-        // .write_zero_low_time(52000, 5000)
-        // .write_zero_recovery_time(2750)
-        // .weak_pullup_resistor(1000)
+        .reset_pulse(440000, 44000)
+        .presence_detect_time(58000, 5500)
+        .write_zero_low_time(52000, 5000)
+        .write_zero_recovery_time(2750)
+        .weak_pullup_resistor(1000)
         .build();
     // Configure the DS2484 port
     port_cfg
