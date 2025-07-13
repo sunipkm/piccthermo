@@ -20,6 +20,7 @@ pub fn onewire_thread(
     leds: bool,
     sink: safe_mpsc::SafeSender<Measurement>,
     exclude: Vec<u32>,
+    no_overdrive: bool,
 ) {
     let lpath = path.to_string_lossy();
     'root: while running.load(Ordering::Relaxed) {
@@ -95,25 +96,28 @@ pub fn onewire_thread(
             .collect::<Vec<_>>();
         let roms = roms.join(", ");
         log::info!("[TMP] {lpath}> Roms enumerated: {roms}",);
-        if let Err(e) = temp_sensors.enable_overdrive(&mut ds2484) {
-            log::error!("[TMP] {lpath}> Failed to enable overdrive mode: {e:?}",);
-        }
-        // At this point, we SHOULD have overdrive mode enabled
-        // Do a conversion to verify
-        if let Err(e) = temp_sensors.trigger_temperature_conversion(&mut ds2484, &mut delay) {
-            match e {
-                ds2484::OneWireError::NoDevicePresent => {
-                    log::warn!(
-                        "[TMP] {lpath}> No device present on the bus in overdrive mode, disabling overdrive",
-                    );
-                    if let Err(e) = temp_sensors.disable_overdrive(&mut ds2484) {
-                        log::error!("[TMP] {lpath}> Failed to disable overdrive mode: {e:?}",);
-                    } else {
-                        log::info!("[TMP] {lpath}> Overdrive mode disabled successfully",);
+        if !no_overdrive {
+            log::info!("[TMP] {lpath}> Enabling overdrive mode",);
+            if let Err(e) = temp_sensors.enable_overdrive(&mut ds2484) {
+                log::error!("[TMP] {lpath}> Failed to enable overdrive mode: {e:?}",);
+            }
+            // At this point, we SHOULD have overdrive mode enabled
+            // Do a conversion to verify
+            if let Err(e) = temp_sensors.trigger_temperature_conversion(&mut ds2484, &mut delay) {
+                match e {
+                    ds2484::OneWireError::NoDevicePresent => {
+                        log::warn!(
+                            "[TMP] {lpath}> No device present on the bus in overdrive mode, disabling overdrive",
+                        );
+                        if let Err(e) = temp_sensors.disable_overdrive(&mut ds2484) {
+                            log::error!("[TMP] {lpath}> Failed to disable overdrive mode: {e:?}",);
+                        } else {
+                            log::info!("[TMP] {lpath}> Overdrive mode disabled successfully",);
+                        }
                     }
-                }
-                _ => {
-                    log::error!("[TMP] {lpath}> Failed to trigger temperature conversion: {e:?}",);
+                    _ => {
+                        log::error!("[TMP] {lpath}> Failed to trigger temperature conversion: {e:?}",);
+                    }
                 }
             }
         }

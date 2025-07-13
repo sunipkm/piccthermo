@@ -24,7 +24,7 @@ use temp_sensors::onewire_thread;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(version, about, long_about)]
 struct Args {
     /// I2C bus IDs for temperature sensors (e.g. 0,1,2 for /dev/i2c-0, /dev/i2c-1, /dev/i2c-2)
     #[arg(
@@ -46,6 +46,9 @@ struct Args {
     /// Exclusion filter
     #[arg(long, default_value_t = String::from(""))]
     exclude: String,
+    /// Disable overdriven mode
+    #[arg(long, default_value_t = false)]
+    no_overdrive: bool,
 }
 
 fn main() {
@@ -103,7 +106,7 @@ fn main() {
                 let sink = data_tx.clone();
                 let exclude = exclude.clone();
                 Some(thread::spawn({
-                    move || onewire_thread(path, running, args.leds, sink, exclude)
+                    move || onewire_thread(path, running, args.leds, sink, exclude, args.no_overdrive)
                 }))
             } else {
                 None
