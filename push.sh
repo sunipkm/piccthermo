@@ -1,21 +1,58 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-while :; do
-    case $1 in
-        --force) FORCE=1 ;;
-        --help) echo "Usage: $0 [--force]"; exit 0 ;;
-        *) break ;;
+# Initialize variables
+REMOTE_HOST=""
+FORCE=false
+
+# Function to display help message
+show_help() {
+    echo "Usage: $0 [OPTIONS] HOST"
+    echo
+    echo "Positional argument:"
+    echo "  HOST        The host to target"
+    echo
+    echo "Optional arguments:"
+    echo "  --force     Set the FORCE flag to true"
+    echo "  -h, --help  Show this help message"
+    exit 0
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            show_help
+            ;;
+        --force)
+            FORCE=true
+            shift
+            ;;
+        *)
+            if [[ -z "$REMOTE_HOST" ]]; then
+                REMOTE_HOST="$1"
+            else
+                echo "Error: Unknown argument $1"
+                show_help
+            fi
+            shift
+            ;;
     esac
-    shift
 done
-if [ -n "$FORCE" ]; then
+
+# Check if the REMOTE_HOST is provided
+if [[ -z "$REMOTE_HOST" ]]; then
+    echo "Error: HOST is required."
+    show_help
+fi
+
+if $FORCE; then
     echo "Force mode enabled. All files will be pushed."
 else
     echo "Normal mode. Only new or modified files will be pushed."
 fi
 
 TARGET="armv7-unknown-linux-gnueabihf"
-REMOTE_TARGET=$(ssh pyro uname -m)
+REMOTE_TARGET=$(ssh $REMOTE_HOST uname -m)
 if [ $? -eq 0 ]; then
     if [ $REMOTE_TARGET = "aarch64" ]; then
         echo "Remote system is ARM64."
@@ -23,19 +60,19 @@ if [ $? -eq 0 ]; then
     fi
 fi
 cross build --target $TARGET --release
-ssh pyro -t 'mkdir -p ~/thermo-server'
-ssh -q pyro -t 'stat "thermo-server/thermo-server" &> /dev/null'
-if [ $? -ne 0 ] || [ -n "$FORCE" ]; then
-    scp target/$TARGET/release/thermo-server pyro:~/thermo-server
+ssh $REMOTE_HOST -t 'mkdir -p ~/thermo-server'
+ssh -q $REMOTE_HOST -t 'stat "thermo-server/thermo-server" &> /dev/null'
+if [ $? -ne 0 ] || $FORCE; then
+    scp target/$TARGET/release/thermo-server $REMOTE_HOST:~/thermo-server
 else
     echo "Not updating server binary."
 fi
-scp target/$TARGET/release/thermo-tester pyro:~/thermo-server
-scp target/$TARGET/release/humi-tester pyro:~/thermo-server
-scp target/$TARGET/release/thermo-ident pyro:~/thermo-server
-scp target/$TARGET/release/thermo-cputemp pyro:~/thermo-server
-ssh -q pyro -t 'stat "thermo-server/thermo.env" &> /dev/null'
+scp target/$TARGET/release/thermo-tester $REMOTE_HOST:~/thermo-server
+scp target/$TARGET/release/humi-tester $REMOTE_HOST:~/thermo-server
+scp target/$TARGET/release/thermo-ident $REMOTE_HOST:~/thermo-server
+scp target/$TARGET/release/thermo-cputemp $REMOTE_HOST:~/thermo-server
+ssh -q $REMOTE_HOST -t 'stat "thermo-server/thermo.env" &> /dev/null'
 if [ $? -ne 0 ]; then
-    scp thermo.env thermo.service pyro:~/thermo-server
+    scp thermo.env thermo.service $REMOTE_HOST:~/thermo-server
 fi
-scp disable_ethernet_gadget.sh pyro:~/thermo-server
+scp disable_ethernet_gadget.sh $REMOTE_HOST:~/thermo-server
