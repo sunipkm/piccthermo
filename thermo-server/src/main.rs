@@ -31,15 +31,15 @@ struct Args {
         long,
         use_value_delimiter = true,
         value_delimiter = ',',
-        required = true
+        default_value = "1",
     )]
     thermo_paths: Vec<u8>,
     /// I2C bus IDs for humidity sensors (e.g. 0,1,2 for /dev/i2c-0, /dev/i2c-1, /dev/i2c-2)
     #[arg(long, use_value_delimiter = true, value_delimiter = ',')]
     humidity_paths: Vec<u8>,
     /// Serial port for data sink
-    #[arg(long, required = true)]
-    serial: String,
+    #[arg(long, required = false)]
+    serial: Option<String>,
     /// Enable LED control
     #[arg(long, default_value_t = false)]
     leds: bool,
@@ -57,9 +57,11 @@ fn main() {
     // Parse command line arguments
     let args = Args::parse();
     log::info!("Arguments: {args:#?}");
-    let serial = PathBuf::from(&args.serial);
-    if !serial.exists() {
-        log::error!("[COM] Fatal error: {} does not exist.", &args.serial);
+    // let serial = args.serial;
+    if let Some(ref serial) = args.serial
+        && !PathBuf::from(serial).exists()
+    {
+        log::error!("[COM] Fatal error: {} does not exist.", serial);
         return;
     }
     // Exclusion filter
@@ -91,9 +93,14 @@ fn main() {
     // Channel
     let (data_tx, data_rx) = safe_mpsc::channel();
     // Spawn the serial communication thread
-    let ser_hdl = {
+    let ser_hdl = if let Some(ref serial) = args.serial {
         let running = running.clone();
-        thread::spawn(move || serial_comm::serial_thread(args.serial, running, data_rx))
+        let serial = serial.clone();
+        Some(thread::spawn(move || {
+            serial_comm::serial_thread(serial, running, data_rx)
+        }))
+    } else {
+        None
     };
     // Spawn the temperature sensor threads
     let mut temp_hdls = args
@@ -105,8 +112,11 @@ fn main() {
                 let running = running.clone();
                 let sink = data_tx.clone();
                 let exclude = exclude.clone();
+                let print = args.serial.is_none();
                 Some(thread::spawn({
-                    move || onewire_thread(path, running, args.leds, sink, exclude, args.no_overdrive)
+                    move || {
+                        onewire_thread(path, running, args.leds, sink, exclude, args.no_overdrive, print)
+                    }
                 }))
             } else {
                 None
@@ -156,9 +166,11 @@ fn main() {
         }
     }
     // Join the serial communication thread
-    if let Err(e) = ser_hdl.join() {
-        log::error!("[COM] Thread panicked: {e:#?}");
-    } else {
-        log::info!("[COM] Thread joined successfully.");
+    if let Some(ser_hdl) = ser_hdl {
+        if let Err(e) = ser_hdl.join() {
+            log::error!("[COM] Thread panicked: {e:#?}");
+        } else {
+            log::info!("[COM] Thread joined successfully.");
+        }
     }
 }

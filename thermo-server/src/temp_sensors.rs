@@ -21,6 +21,7 @@ pub fn onewire_thread(
     sink: safe_mpsc::SafeSender<Measurement>,
     exclude: Vec<u32>,
     no_overdrive: bool,
+    print: bool,
 ) {
     let lpath = path.to_string_lossy();
     'root: while running.load(Ordering::Relaxed) {
@@ -157,6 +158,13 @@ pub fn onewire_thread(
                         }
                     })
                     .collect::<Vec<_>>();
+            if print {
+                let mut msg = String::new();
+                for (id, temp) in &data {
+                    msg.push_str(&format!("{id:08x}: {temp:.2} °C, "));
+                }
+                log::info!("[TMP] {lpath}> {msg}");
+            }
             if let Err(e) = sink.send(Measurement::Temperature(data)) {
                 log::error!("[TMP] {lpath}> Failed to send data: {e:?}",);
                 continue 'readout; // probably the receiver has been dropped, meaning we are leaving
